@@ -24,7 +24,7 @@ class VideoRepository:
         if self.is_postgres:
             if not psycopg:
                 raise RuntimeError("psycopg package is required for PostgreSQL connections.")
-            return psycopg.connect(self.db_path, row_factory=dict_row)
+            return psycopg.connect(self.db_path, row_factory=dict_row, autocommit=True)
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
@@ -39,8 +39,70 @@ class VideoRepository:
     def ensure_schema(self) -> None:
         conn = self._connect()
         try:
-            with conn:
-                if self.is_postgres:
+            if self.is_postgres:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        email TEXT UNIQUE NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        api_key TEXT UNIQUE NOT NULL,
+                        instagram_account_id TEXT,
+                        instagram_access_token TEXT,
+                        default_caption_suffix TEXT,
+                        share_to_feed INTEGER DEFAULT 0,
+                        default_post_interval_hours INTEGER DEFAULT 3,
+                        created_at TEXT NOT NULL
+                    )
+                """)
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_account_id TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_access_token TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_caption_suffix TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_post_interval_hours INTEGER DEFAULT 3")
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS videos (
+                        id SERIAL PRIMARY KEY,
+                        user_id TEXT,
+                        path TEXT UNIQUE NOT NULL,
+                        filename TEXT NOT NULL,
+                        description TEXT,
+                        themes TEXT,
+                        orientation TEXT,
+                        duration_seconds REAL,
+                        has_face INTEGER,
+                        frame_paths TEXT,
+                        updated_at TEXT
+                    )
+                """)
+                conn.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_id TEXT")
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT,
+                        url TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        progress INTEGER DEFAULT 0,
+                        output_path TEXT,
+                        error TEXT,
+                        caption TEXT,
+                        scheduled_at TEXT,
+                        posted_at TEXT,
+                        share_to_feed INTEGER DEFAULT 0,
+                        original_s3_url TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                """)
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS caption TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS scheduled_at TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS posted_at TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_s3_url TEXT")
+            else:
+                with conn:
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS users (
                             id TEXT PRIMARY KEY,
@@ -49,46 +111,9 @@ class VideoRepository:
                             api_key TEXT UNIQUE NOT NULL,
                             instagram_account_id TEXT,
                             instagram_access_token TEXT,
-                            created_at TEXT NOT NULL
-                        )
-                    """)
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS videos (
-                            id SERIAL PRIMARY KEY,
-                            user_id TEXT REFERENCES users(id),
-                            path TEXT UNIQUE NOT NULL,
-                            filename TEXT NOT NULL,
-                            description TEXT,
-                            themes TEXT,
-                            orientation TEXT,
-                            duration_seconds REAL,
-                            has_face INTEGER,
-                            frame_paths TEXT,
-                            updated_at TEXT
-                        )
-                    """)
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS jobs (
-                            id TEXT PRIMARY KEY,
-                            user_id TEXT REFERENCES users(id),
-                            url TEXT NOT NULL,
-                            status TEXT NOT NULL,
-                            progress INTEGER DEFAULT 0,
-                            output_path TEXT,
-                            error TEXT,
-                            created_at TEXT NOT NULL,
-                            updated_at TEXT NOT NULL
-                        )
-                    """)
-                else:
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS users (
-                            id TEXT PRIMARY KEY,
-                            email TEXT UNIQUE NOT NULL,
-                            password_hash TEXT NOT NULL,
-                            api_key TEXT UNIQUE NOT NULL,
-                            instagram_account_id TEXT,
-                            instagram_access_token TEXT,
+                            default_caption_suffix TEXT,
+                            share_to_feed INTEGER DEFAULT 0,
+                            default_post_interval_hours INTEGER DEFAULT 3,
                             created_at TEXT NOT NULL
                         )
                     """)
@@ -138,6 +163,7 @@ class VideoRepository:
                             scheduled_at TEXT,
                             posted_at TEXT,
                             share_to_feed INTEGER DEFAULT 0,
+                            original_s3_url TEXT,
                             created_at TEXT NOT NULL,
                             updated_at TEXT NOT NULL
                         )

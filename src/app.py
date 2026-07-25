@@ -55,9 +55,18 @@ logging.basicConfig(
 
 def get_repo() -> VideoRepository:
     db_loc = settings.database_url if settings.database_url else str(Path(settings.data_dir) / "videos.db")
-    repo = VideoRepository(db_loc)
-    repo.ensure_schema()
-    return repo
+    try:
+        repo = VideoRepository(db_loc)
+        repo.ensure_schema()
+        return repo
+    except Exception as e:
+        if settings.database_url:
+            logging.warning(f"Could not connect to PostgreSQL ({e}), falling back to local SQLite database.")
+            fallback_loc = str(Path(settings.data_dir) / "videos.db")
+            repo = VideoRepository(fallback_loc)
+            repo.ensure_schema()
+            return repo
+        raise
 
 
 def hash_password(password: str) -> str:

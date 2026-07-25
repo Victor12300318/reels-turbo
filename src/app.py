@@ -698,6 +698,51 @@ async def batch_schedule_jobs(request: Request, x_api_key: str | None = Header(N
     }
 
 
+@app.patch("/api/v1/jobs/{job_id}/schedule")
+async def update_job_schedule_endpoint(job_id: str, request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    body = await request.json()
+    scheduled_at = body.get("scheduled_at")
+
+    if not scheduled_at:
+        raise HTTPException(status_code=400, detail="O campo 'scheduled_at' é obrigatório.")
+
+    repo = get_repo()
+    job = repo.get_job(job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+
+    success = repo.update_job_scheduled_time(job_id, str(scheduled_at))
+    if not success:
+        raise HTTPException(status_code=500, detail="Falha ao atualizar o horário de agendamento.")
+
+    return {
+        "status": "success",
+        "message": "Horário de agendamento atualizado com sucesso!",
+        "job_id": job_id,
+        "scheduled_at": str(scheduled_at)
+    }
+
+
+@app.delete("/api/v1/jobs/{job_id}/schedule")
+def cancel_job_schedule_endpoint(job_id: str, request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    repo = get_repo()
+    job = repo.get_job(job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+
+    success = repo.cancel_job_schedule(job_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Falha ao cancelar o agendamento.")
+
+    return {
+        "status": "success",
+        "message": "Agendamento cancelado com sucesso. O vídeo está pronto para publicação.",
+        "job_id": job_id
+    }
+
+
 @app.post("/api/v1/jobs/{job_id}/publish")
 async def publish_job_now(job_id: str, request: Request, x_api_key: str | None = Header(None)):
     user = authenticate_request(request, x_api_key)
@@ -711,7 +756,7 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if not job or job["user_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Job não encontrado.")
 
-    if job["status"] != "completed" or not job.get("output_path"):
+    if job["status"] not in ("completed", "scheduled") or not job.get("output_path"):
         raise HTTPException(status_code=400, detail="Vídeo ainda não foi renderizado ou falhou.")
 
     ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id

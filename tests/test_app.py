@@ -83,24 +83,27 @@ def test_send_video_to_n8n_file_not_found(mock_post):
 
 
 def test_admin_settings_endpoint():
+    import uuid
     from src.app import get_repo
     repo = get_repo()
-    admin_user = repo.create_user(email="admin_set@test.com", password_hash="hash", api_key="admin_key_set", is_admin=1)
-    non_admin = repo.create_user(email="user_set@test.com", password_hash="hash", api_key="user_key_set", is_admin=0)
+    admin_key = f"admin_key_{uuid.uuid4()}"
+    user_key = f"user_key_{uuid.uuid4()}"
+    repo.create_user(email=f"admin_{uuid.uuid4()}@test.com", password_hash="hash", api_key=admin_key, is_admin=1)
+    repo.create_user(email=f"user_{uuid.uuid4()}@test.com", password_hash="hash", api_key=user_key, is_admin=0)
 
     # Non-admin forbidden
-    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": "user_key_set"})
+    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": user_key})
     assert res.status_code == 403
 
     # Admin GET
-    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": "admin_key_set"})
+    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": admin_key})
     assert res.status_code == 200
     assert "ai_provider" in res.json()
 
     # Admin POST
     res = client.post(
         "/api/v1/admin/settings",
-        headers={"X-API-Key": "admin_key_set"},
+        headers={"X-API-Key": admin_key},
         json={
             "ai_provider": "openrouter",
             "openrouter_api_key": "sk-test-key",
@@ -110,7 +113,43 @@ def test_admin_settings_endpoint():
     assert res.status_code == 200
 
     # Verify updated
-    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": "admin_key_set"})
+    res = client.get("/api/v1/admin/settings", headers={"X-API-Key": admin_key})
     assert res.json()["ai_provider"] == "openrouter"
     assert res.json()["openrouter_api_key"] == "sk-test-key"
     assert res.json()["openrouter_model"] == "openai/gpt-4o-mini"
+
+
+def test_job_schedule_update_and_cancel():
+    import uuid
+    from src.app import get_repo
+    repo = get_repo()
+    usr_key = f"usr_key_sched_{uuid.uuid4()}"
+    user = repo.create_user(email=f"sched_{uuid.uuid4()}@test.com", password_hash="hash", api_key=usr_key)
+    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/999/")
+    
+    # Initially pending, mark scheduled
+    repo.update_job_schedule(job["id"], caption="Cap", scheduled_at="2026-08-01T12:00:00Z", share_to_feed=0)
+
+    # Test PATCH schedule
+    res = client.patch(
+        f"/api/v1/jobs/{job['id']}/schedule",
+        headers={"X-API-Key": usr_key},
+        json={"scheduled_at": "2026-08-02T15:30:00Z"}
+    )
+    assert res.status_code == 200
+    assert res.json()["scheduled_at"] == "2026-08-02T15:30:00Z"
+
+    updated_job = repo.get_job(job["id"])
+    assert updated_job["scheduled_at"] == "2026-08-02T15:30:00Z"
+    assert updated_job["status"] == "scheduled"
+
+    # Test DELETE schedule (cancel)
+    res = client.delete(
+        f"/api/v1/jobs/{job['id']}/schedule",
+        headers={"X-API-Key": usr_key}
+    )
+    assert res.status_code == 200
+
+    cancelled_job = repo.get_job(job["id"])
+    assert cancelled_job["scheduled_at"] is None
+    assert cancelled_job["status"] == "completed"

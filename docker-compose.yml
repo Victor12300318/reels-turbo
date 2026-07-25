@@ -1,11 +1,10 @@
 services:
   reels-api:
     build: .
-    container_name: reels-api
     ports:
       - "${API_PORT:-8008}:8000"
-    env_file:
-      - .env
+    expose:
+      - "8000"
     environment:
       - LOCAL_VIDEOS_DIR=/app/videos
       - DATABASE_URL=${DATABASE_URL}
@@ -29,9 +28,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: reels-frontend
     ports:
       - "${FRONTEND_PORT:-3008}:3000"
+    expose:
+      - "3000"
     environment:
       - HOSTNAME=0.0.0.0
       - PORT=3000

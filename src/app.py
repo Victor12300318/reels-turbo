@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response, RedirectResponse
 from src.main import clone_reels_pipeline
 from src.config import get_settings
 from src.database import VideoRepository
-from src.gemini_client import GeminiClient
+from src.ai_client import get_ai_client
 from src.analyzer import VideoAnalyzer
 from src.indexer import index_videos_folder
 
@@ -872,11 +872,7 @@ async def upload_video_stream(
     def index_single():
         try:
             curr_settings = get_settings()
-            if not curr_settings.gemini_api_key:
-                logging.warning(f"GEMINI_API_KEY não configurada no .env. Ignorando análise de IA para o vídeo {filename}.")
-                return
-
-            client = GeminiClient(curr_settings.gemini_api_key, curr_settings.gemini_model)
+            client = get_ai_client(repo)
             analyzer = VideoAnalyzer(client)
             index_videos_folder(
                 str(user_video_dir),
@@ -887,7 +883,7 @@ async def upload_video_stream(
                 user_id=user["id"]
             )
         except Exception as e:
-            logging.error(f"Erro ao indexar vídeo {filename} via Gemini: {e}")
+            logging.error(f"Erro ao indexar vídeo {filename} via IA: {e}")
 
     background_tasks.add_task(index_single)
 
@@ -967,11 +963,7 @@ async def upload_video(
     def index_batch():
         try:
             curr_settings = get_settings()
-            if not curr_settings.gemini_api_key:
-                logging.warning("GEMINI_API_KEY não configurada no .env. Ignorando análise de IA em lote.")
-                return
-
-            client = GeminiClient(curr_settings.gemini_api_key, curr_settings.gemini_model)
+            client = get_ai_client(repo)
             analyzer = VideoAnalyzer(client)
             index_videos_folder(
                 str(user_video_dir),
@@ -982,7 +974,7 @@ async def upload_video(
                 user_id=user["id"]
             )
         except Exception as e:
-            logging.error(f"Erro ao indexar lote de vídeos via Gemini: {e}")
+            logging.error(f"Erro ao indexar lote de vídeos via IA: {e}")
 
     background_tasks.add_task(index_batch)
 

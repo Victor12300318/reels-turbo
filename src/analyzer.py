@@ -30,7 +30,7 @@ def _safe_parse_json(raw: Any, default_val: Any) -> Any:
 
 
 class VideoAnalyzer:
-    def __init__(self, client: GeminiClient):
+    def __init__(self, client: Any):
         self.client = client
 
     def describe(self, frames: list[Image.Image]) -> dict[str, Any]:

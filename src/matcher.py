@@ -5,7 +5,7 @@ from src.gemini_client import GeminiClient
 
 
 class Matcher:
-    def __init__(self, client: GeminiClient):
+    def __init__(self, client: Any):
         self.client = client
 
     def rank_candidates(

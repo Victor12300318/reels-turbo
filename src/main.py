@@ -6,7 +6,7 @@ from typing import Any
 
 from src.config import get_settings
 from src.database import VideoRepository
-from src.gemini_client import GeminiClient
+from src.ai_client import get_ai_client
 from src.analyzer import VideoAnalyzer
 from src.indexer import index_videos_folder
 from src.downloader import download_reels
@@ -27,7 +27,7 @@ def index_command(args: argparse.Namespace):
     db_location = settings.database_url if settings.database_url else str(Path(settings.data_dir) / "videos.db")
     repo = VideoRepository(db_location)
     repo.ensure_schema()
-    client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+    client = get_ai_client(repo)
     analyzer = VideoAnalyzer(client)
     count = index_videos_folder(
         settings.local_videos_dir,
@@ -50,7 +50,7 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
     if not candidates:
         raise ValueError("No local videos indexed. Upload local videos first.")
 
-    client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+    client = get_ai_client(repo)
     analyzer = VideoAnalyzer(client)
 
     if progress_callback:

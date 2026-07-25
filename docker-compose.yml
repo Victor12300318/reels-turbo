@@ -1,11 +1,15 @@
 services:
   reels-api:
     build: .
+    env_file:
+      - .env
     ports:
       - "${API_PORT:-8008}:8000"
     expose:
       - "8000"
     environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
       - LOCAL_VIDEOS_DIR=/app/videos
       - DATABASE_URL=${DATABASE_URL}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
@@ -20,8 +24,12 @@ services:
       - META_APP_SECRET=${META_APP_SECRET}
       - INSTAGRAM_ACCOUNT_ID=${INSTAGRAM_ACCOUNT_ID}
       - INSTAGRAM_ACCESS_TOKEN=${INSTAGRAM_ACCESS_TOKEN}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./data:/app/data
+      - ./.env:/app/.env
     command: ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
 
   reels-frontend:

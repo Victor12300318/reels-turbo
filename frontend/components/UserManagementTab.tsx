@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, UserPlus, Key, Shield, Trash2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Users, UserPlus, Key, Shield, Trash2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react'
 
 interface User {
   id: string
@@ -28,7 +28,58 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
   const [resetUserId, setResetUserId] = useState<string | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
 
+  // System AI Settings state (Admin only)
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>('gemini')
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('')
+  const [openrouterModel, setOpenrouterModel] = useState('google/gemini-2.0-flash-001')
+  const [aiSaving, setAiSaving] = useState(false)
+  const [aiMessage, setAiMessage] = useState('')
+
   const API_BASE = '/api/v1'
+
+  const fetchSystemSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings`, {
+        headers: { 'X-API-Key': apiKey }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiProvider(data.ai_provider || 'gemini')
+        setOpenrouterApiKey(data.openrouter_api_key || '')
+        setOpenrouterModel(data.openrouter_model || 'google/gemini-2.0-flash-001')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSaveAiSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAiSaving(true)
+    setAiMessage('')
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({
+          ai_provider: aiProvider,
+          openrouter_api_key: openrouterApiKey,
+          openrouter_model: openrouterModel
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAiMessage('Configurações de IA salvas com sucesso!')
+      } else {
+        setAiMessage(`Erro: ${data.detail || 'Falha ao salvar'}`)
+      }
+    } catch (err: any) {
+      setAiMessage(`Erro: ${err.message}`)
+    } finally {
+      setAiSaving(false)
+      setTimeout(() => setAiMessage(''), 4000)
+    }
+  }
 
   const fetchUsers = async () => {
     try {
@@ -51,6 +102,7 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
 
   useEffect(() => {
     fetchUsers()
+    fetchSystemSettings()
   }, [apiKey])
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -185,6 +237,67 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" /> {error}
           </div>
         )}
+
+        {/* System AI Provider Configuration (Admin) */}
+        <form onSubmit={handleSaveAiSettings} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#0066FF]" /> Provedor de Inteligência Artificial (Admin)
+          </h3>
+          <p className="text-[11px] text-slate-500">Selecione o provedor de IA utilizado globalmente no sistema para análise e seleção de vídeos.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">Provedor Ativo</label>
+              <select
+                value={aiProvider}
+                onChange={(e) => setAiProvider(e.target.value as any)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#0066FF]"
+              >
+                <option value="gemini">Google Gemini (Default SDK)</option>
+                <option value="openrouter">OpenRouter (Multi-Model API)</option>
+              </select>
+            </div>
+
+            {aiProvider === 'openrouter' && (
+              <>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">OpenRouter API Key</label>
+                  <input
+                    type="password"
+                    placeholder="sk-or-v1-..."
+                    value={openrouterApiKey}
+                    onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                    required={aiProvider === 'openrouter'}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#0066FF]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Modelo OpenRouter</label>
+                  <input
+                    type="text"
+                    placeholder="google/gemini-2.0-flash-001"
+                    value={openrouterModel}
+                    onChange={(e) => setOpenrouterModel(e.target.value)}
+                    required={aiProvider === 'openrouter'}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#0066FF]"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {aiMessage && (
+            <p className="text-xs text-blue-800 bg-blue-50 p-2.5 rounded-lg border border-blue-200">{aiMessage}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={aiSaving}
+            className="w-full rounded-lg bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2 text-xs shadow-sm shadow-blue-600/20 transition-all disabled:opacity-50"
+          >
+            {aiSaving ? 'Salvando...' : 'Salvar Configurações de IA'}
+          </button>
+        </form>
 
         {/* Create User Form */}
         <form onSubmit={handleCreateUser} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">

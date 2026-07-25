@@ -697,7 +697,7 @@ async def upload_video(
     upload_list = []
     try:
         form = await request.form()
-        for key, value in form.items():
+        for key, value in form.multi_items():
             if hasattr(value, "filename") and value.filename:
                 upload_list.append(value)
     except Exception as e:
@@ -720,6 +720,26 @@ async def upload_video(
             shutil.copyfileobj(f.file, buffer)
         saved_files.append(dest_path)
 
+        # Calculate duration if possible
+        duration = 0.0
+        try:
+            from src import ffmpeg_utils
+            duration = ffmpeg_utils.get_duration(str(dest_path))
+        except Exception:
+            pass
+
+        # Save to DB IMMEDIATELY so user sees the video in their library right away
+        repo.upsert({
+            "path": str(dest_path),
+            "filename": f.filename,
+            "description": "Pronto para uso (indexando com IA em segundo plano)",
+            "themes": "",
+            "orientation": "vertical",
+            "duration_seconds": duration,
+            "has_face": 0,
+            "frame_paths": [],
+        }, user_id=user["id"])
+
         # Upload library video to S3
         try:
             from src.s3_client import S3Storage
@@ -740,19 +760,16 @@ async def upload_video(
                 repo,
                 frames_per_video=settings.frames_per_video,
                 frames_output_dir=str(Path(settings.data_dir) / "frames"),
+                user_id=user["id"]
             )
-            for path_obj in saved_files:
-                video_rec = repo.get_by_path(str(path_obj))
-                if video_rec:
-                    repo.upsert(video_rec, user_id=user["id"])
         except Exception as e:
-            logging.error(f"Erro ao indexar lote de vídeos: {e}")
+            logging.error(f"Erro ao indexar lote de vídeos via Gemini: {e}")
 
     background_tasks.add_task(index_batch)
 
     return {
         "status": "uploaded",
-        "message": f"{len(saved_files)} vídeo(s) enviado(s) com sucesso e enfileirado(s) para indexação!",
+        "message": f"{len(saved_files)} vídeo(s) enviado(s) com sucesso e salvo(s) na sua biblioteca!",
         "count": len(saved_files),
     }
 

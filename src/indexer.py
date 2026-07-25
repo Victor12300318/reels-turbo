@@ -21,31 +21,43 @@ def index_videos_folder(
     repo: VideoRepository,
     frames_per_video: int = 3,
     frames_output_dir: str = "./data/frames",
+    user_id: str | None = None
 ) -> int:
     files = _list_video_files(videos_dir)
     indexed = 0
     for file_path in files:
-        duration = ffmpeg_utils.get_duration(str(file_path))
-        timestamps = ffmpeg_utils.calculate_frame_timestamps(duration, frames_per_video)
-        frame_paths = ffmpeg_utils.extract_frames(str(file_path), timestamps, frames_output_dir)
-
-        images = [open_image(p) for p in frame_paths]
+        duration = 0.0
         try:
-            description = analyzer.describe(images)
-        finally:
-            for img in images:
-                img.close()
+            duration = ffmpeg_utils.get_duration(str(file_path))
+        except Exception:
+            pass
+
+        description = {}
+        frame_paths = []
+        try:
+            timestamps = ffmpeg_utils.calculate_frame_timestamps(duration, frames_per_video)
+            frame_paths = ffmpeg_utils.extract_frames(str(file_path), timestamps, frames_output_dir)
+
+            images = [open_image(p) for p in frame_paths]
+            try:
+                description = analyzer.describe(images)
+            finally:
+                for img in images:
+                    img.close()
+        except Exception as e:
+            import logging
+            logging.warning(f"Não foi possível analisar vídeo '{file_path.name}' via Gemini: {e}")
 
         repo.upsert({
             "path": str(file_path),
             "filename": file_path.name,
-            "description": description.get("description", ""),
+            "description": description.get("description", "Vídeo local pronto para uso"),
             "themes": description.get("themes", ""),
-            "orientation": description.get("orientation", ""),
+            "orientation": description.get("orientation", "vertical"),
             "duration_seconds": duration,
             "has_face": int(description.get("has_face", 0)),
             "frame_paths": frame_paths,
-        })
+        }, user_id=user_id)
         indexed += 1
     return indexed
 

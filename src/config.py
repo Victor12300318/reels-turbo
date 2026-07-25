@@ -1,9 +1,17 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+
+def _load_env():
+    dotenv_file = find_dotenv()
+    if dotenv_file:
+        override_env = "PYTEST_CURRENT_TEST" not in os.environ
+        load_dotenv(dotenv_file, override=override_env)
+
+
+_load_env()
 
 
 @dataclass(frozen=True)
@@ -40,7 +48,7 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    load_dotenv()
+    _load_env()
     cookies_file = os.getenv("INSTAGRAM_COOKIES_FILE")
     if not cookies_file:
         possible_paths = ["data/cookies.txt", "/app/data/cookies.txt", "./data/cookies.txt"]

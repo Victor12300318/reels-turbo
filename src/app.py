@@ -766,14 +766,19 @@ async def upload_video_stream(
     # Enqueue background indexer for Gemini AI analysis
     def index_single():
         try:
-            client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+            curr_settings = get_settings()
+            if not curr_settings.gemini_api_key:
+                logging.warning(f"GEMINI_API_KEY não configurada no .env. Ignorando análise de IA para o vídeo {filename}.")
+                return
+
+            client = GeminiClient(curr_settings.gemini_api_key, curr_settings.gemini_model)
             analyzer = VideoAnalyzer(client)
             index_videos_folder(
                 str(user_video_dir),
                 analyzer,
                 repo,
-                frames_per_video=settings.frames_per_video,
-                frames_output_dir=str(Path(settings.data_dir) / "frames"),
+                frames_per_video=curr_settings.frames_per_video,
+                frames_output_dir=str(Path(curr_settings.data_dir) / "frames"),
                 user_id=user["id"]
             )
         except Exception as e:
@@ -856,14 +861,19 @@ async def upload_video(
     # Enqueue background indexer for user directory
     def index_batch():
         try:
-            client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+            curr_settings = get_settings()
+            if not curr_settings.gemini_api_key:
+                logging.warning("GEMINI_API_KEY não configurada no .env. Ignorando análise de IA em lote.")
+                return
+
+            client = GeminiClient(curr_settings.gemini_api_key, curr_settings.gemini_model)
             analyzer = VideoAnalyzer(client)
             index_videos_folder(
                 str(user_video_dir),
                 analyzer,
                 repo,
-                frames_per_video=settings.frames_per_video,
-                frames_output_dir=str(Path(settings.data_dir) / "frames"),
+                frames_per_video=curr_settings.frames_per_video,
+                frames_output_dir=str(Path(curr_settings.data_dir) / "frames"),
                 user_id=user["id"]
             )
         except Exception as e:

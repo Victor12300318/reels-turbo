@@ -238,16 +238,20 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         user = repo.get_user_by_id(user_id) or {}
         ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
         ig_token = user.get("instagram_access_token") or settings.instagram_access_token
+        user_caption = user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
+        stf = bool(user.get("share_to_feed", 0))
+
         if ig_account_id and ig_token and public_url.startswith("http"):
             try:
                 from src.instagram_publisher import InstagramPublisher
-                logging.info(f"[Job {job_id}] Auto-posting Reels to Instagram account {ig_account_id}...")
+                logging.info(f"[Job {job_id}] Auto-posting Reels to Instagram account {ig_account_id} with caption '{user_caption}'...")
                 publisher = InstagramPublisher()
                 publisher.publish_reel(
                     video_url=public_url,
-                    caption="Clonado com Reels Cloner AI #reels",
+                    caption=user_caption,
                     instagram_account_id=ig_account_id,
-                    access_token=ig_token
+                    access_token=ig_token,
+                    share_to_feed=stf
                 )
             except Exception as ig_err:
                 logging.error(f"[Job {job_id}] Instagram auto-post failed: {ig_err}")

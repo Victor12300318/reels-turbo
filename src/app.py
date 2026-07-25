@@ -59,6 +59,30 @@ logging.basicConfig(
 )
 
 
+class EndpointFilter(logging.Filter):
+    def __init__(self, excluded_endpoints: list[str] | None = None):
+        super().__init__()
+        self.excluded_endpoints = excluded_endpoints or [
+            "/api/v1/jobs",
+            "/api/v1/metrics",
+            "/api/v1/user/me",
+            "/health",
+            "/api/v1/videos",
+            "/admin/cookies/status"
+        ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if " 200 " in msg or " 200 OK" in msg:
+            for ep in self.excluded_endpoints:
+                if ep in msg:
+                    return False
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
+
 def get_repo() -> VideoRepository:
     db_loc = settings.database_url if settings.database_url else str(Path(settings.data_dir) / "videos.db")
     try:

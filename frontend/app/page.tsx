@@ -133,13 +133,16 @@ export default function DashboardPage() {
 
     fetchInitialData(key)
 
+    // Smart Adaptive Polling: 6s when active jobs are running, 30s when idle
+    const hasActiveJobs = jobs.some(j => j.status === 'processing' || j.status === 'pending' || j.status === 'downloading')
+    const pollIntervalMs = hasActiveJobs ? 6000 : 30000
+
     const interval = setInterval(() => {
       fetchJobs(key)
-      fetchMetrics(key)
-    }, 4000)
+    }, pollIntervalMs)
 
     return () => clearInterval(interval)
-  }, [router])
+  }, [router, jobs.map(j => j.status).join(',')])
 
   const fetchInitialData = async (key: string) => {
     setLoading(true)
@@ -212,6 +215,18 @@ export default function DashboardPage() {
         const data = await res.json()
         const newJobs: Job[] = data.jobs || []
         setJobs(newJobs)
+
+        // Derive job metrics locally to avoid extra HTTP calls
+        const totalCloned = newJobs.filter(j => j.status === 'completed' || j.status === 'scheduled').length
+        const totalPublished = newJobs.filter(j => j.posted_at || j.status === 'completed').length
+        const scheduledCount = newJobs.filter(j => j.status === 'scheduled').length
+
+        setMetrics(prev => ({
+          ...prev,
+          total_cloned: totalCloned,
+          total_published: totalPublished,
+          scheduled_count: scheduledCount
+        }))
 
         newJobs.forEach((job) => {
           if (job.status === 'completed' && !completedJobIdsRef.current.has(job.id)) {

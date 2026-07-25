@@ -3,7 +3,7 @@ services:
     build: .
     container_name: reels-api
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-8008}:8000"
     env_file:
       - .env
     environment:
@@ -31,9 +31,9 @@ services:
       dockerfile: Dockerfile
     container_name: reels-frontend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3008}:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:${API_PORT:-8000}
+      - NEXT_PUBLIC_API_URL=http://localhost:${API_PORT:-8008}
       - INTERNAL_API_URL=http://reels-api:8000
     depends_on:
       - reels-api

@@ -45,7 +45,10 @@ class VideoRepository:
                         id TEXT PRIMARY KEY,
                         email TEXT UNIQUE NOT NULL,
                         password_hash TEXT NOT NULL,
+                        password_salt TEXT,
                         api_key TEXT UNIQUE NOT NULL,
+                        is_admin INTEGER DEFAULT 0,
+                        is_active INTEGER DEFAULT 1,
                         instagram_account_id TEXT,
                         instagram_access_token TEXT,
                         default_caption_suffix TEXT,
@@ -54,6 +57,9 @@ class VideoRepository:
                         created_at TEXT NOT NULL
                     )
                 """)
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_account_id TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_access_token TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_caption_suffix TEXT")
@@ -108,7 +114,10 @@ class VideoRepository:
                             id TEXT PRIMARY KEY,
                             email TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
+                            password_salt TEXT,
                             api_key TEXT UNIQUE NOT NULL,
+                            is_admin INTEGER DEFAULT 0,
+                            is_active INTEGER DEFAULT 1,
                             instagram_account_id TEXT,
                             instagram_access_token TEXT,
                             default_caption_suffix TEXT,
@@ -119,6 +128,12 @@ class VideoRepository:
                     """)
                     cursor = conn.execute("PRAGMA table_info(users)")
                     cols = [row[1] for row in cursor.fetchall()]
+                    if "password_salt" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN password_salt TEXT")
+                    if "is_admin" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+                    if "is_active" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
                     if "instagram_account_id" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN instagram_account_id TEXT")
                     if "instagram_access_token" not in cols:
@@ -186,20 +201,74 @@ class VideoRepository:
             conn.close()
 
     # --- USER OPERATIONS ---
-    def create_user(self, email: str, password_hash: str, api_key: str, user_id: str | None = None) -> dict[str, Any]:
+    def create_user(
+        self,
+        email: str,
+        password_hash: str,
+        api_key: str,
+        password_salt: str = "",
+        is_admin: int = 0,
+        is_active: int = 1,
+        user_id: str | None = None
+    ) -> dict[str, Any]:
         uid = user_id or str(uuid.uuid4())
         created_at = datetime.now(timezone.utc).isoformat()
-        ph = self._ph(5)
+        ph = self._ph(8)
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
-                    f"INSERT INTO users (id, email, password_hash, api_key, created_at) VALUES ({ph})",
-                    (uid, email, password_hash, api_key, created_at),
+                    f"INSERT INTO users (id, email, password_hash, password_salt, api_key, is_admin, is_active, created_at) VALUES ({ph})",
+                    (uid, email, password_hash, password_salt, api_key, is_admin, is_active, created_at),
                 )
         finally:
             conn.close()
-        return {"id": uid, "email": email, "api_key": api_key, "created_at": created_at}
+        return {
+            "id": uid, "email": email, "api_key": api_key, "password_salt": password_salt,
+            "is_admin": is_admin, "is_active": is_active, "created_at": created_at
+        }
+
+    def get_all_users(self) -> list[dict[str, Any]]:
+        conn = self._connect()
+        try:
+            cursor = conn.execute("SELECT * FROM users ORDER BY created_at DESC")
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def update_user_password(self, user_id: str, password_hash: str, password_salt: str) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE users SET password_hash = {self._ph(1)}, password_salt = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (password_hash, password_salt, user_id)
+                )
+        finally:
+            conn.close()
+
+    def regenerate_user_api_key(self, user_id: str, new_api_key: str) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE users SET api_key = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (new_api_key, user_id)
+                )
+        finally:
+            conn.close()
+
+    def toggle_user_active(self, user_id: str, is_active: int) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE users SET is_active = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (is_active, user_id)
+                )
+        finally:
+            conn.close()
 
     def get_user_by_email(self, email: str) -> dict[str, Any] | None:
         ph = self._ph(1)

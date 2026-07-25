@@ -69,18 +69,34 @@ def get_repo() -> VideoRepository:
         raise
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
 def get_or_create_default_user(repo: VideoRepository) -> dict:
-    admin = repo.get_user_by_email("admin@reels.com")
+    admin_email = settings.admin_email or "admin@reels.com"
+    admin_password = settings.admin_password or "admin123"
+    
+    admin = repo.get_user_by_email(admin_email)
+    from src.auth import hash_password_pbkdf2, generate_api_key
+    
     if not admin:
+        pwd_hash, pwd_salt = hash_password_pbkdf2(admin_password)
         admin = repo.create_user(
-            email="admin@reels.com",
-            password_hash=hash_password("admin123"),
-            api_key="usr_admin_default_key"
+            email=admin_email,
+            password_hash=pwd_hash,
+            password_salt=pwd_salt,
+            api_key=generate_api_key(),
+            is_admin=1,
+            is_active=1
         )
+    else:
+        # Verify and update password if .env changed
+        from src.auth import verify_password_pbkdf2
+        if not verify_password_pbkdf2(admin_password, admin.get("password_hash", ""), admin.get("password_salt", "")):
+            pwd_hash, pwd_salt = hash_password_pbkdf2(admin_password)
+            repo.update_user_password(admin["id"], pwd_hash, pwd_salt)
+            admin["password_hash"] = pwd_hash
+            admin["password_salt"] = pwd_salt
+        # Ensure admin flag is set
+        if not admin.get("is_admin"):
+            repo.toggle_user_active(admin["id"], 1)
     return admin
 
 
@@ -90,10 +106,22 @@ def authenticate_request(request: Request, x_api_key: str | None = None) -> dict
     # 1. Check X-API-Key / apikey header
     api_key = x_api_key or request.headers.get("x-api-key") or request.headers.get("apikey")
     
-    # 2. Check Authorization header
+    # 2. Check Authorization header (API key only, not JWT here)
     auth_header = request.headers.get("authorization", "")
     if not api_key and auth_header.startswith("Bearer "):
-        api_key = auth_header.split(" ", 1)[1]
+        token = auth_header.split(" ", 1)[1]
+        # Try JWT first
+        if token.startswith("eyJ"):
+            try:
+                import jwt as pyjwt
+                payload = pyjwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+                user = repo.get_user_by_id(payload.get("user_id", ""))
+                if user and user.get("is_active"):
+                    return user
+            except Exception:
+                pass
+        else:
+            api_key = token
 
     # 3. Check query param
     if not api_key:
@@ -101,11 +129,18 @@ def authenticate_request(request: Request, x_api_key: str | None = None) -> dict
 
     if api_key:
         user = repo.get_user_by_api_key(api_key)
-        if user:
+        if user and user.get("is_active", 1):
             return user
 
     # Default fallback to default admin
     return get_or_create_default_user(repo)
+
+
+def require_admin(request: Request, x_api_key: str | None = None) -> dict:
+    user = authenticate_request(request, x_api_key)
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    return user
 
 
 def background_job_processor(job_id: str, user_id: str, url: str, output_dir: str | None, webhook_url: str | None) -> None:
@@ -213,17 +248,37 @@ async def login(request: Request):
     repo = get_repo()
     user = repo.get_user_by_email(email)
     
-    # Auto-seed default user if database is completely empty
-    if not user and email == "admin@reels.com":
+    # Auto-seed default admin if database is completely empty and using .env admin email
+    if not user and email == (settings.admin_email or "admin@reels.com"):
         user = get_or_create_default_user(repo)
 
-    if not user or user["password_hash"] != hash_password(password):
+    if not user or not user.get("is_active", 1):
+        raise HTTPException(status_code=401, detail="Conta inativa ou e-mail incorreto.")
+
+    from src.auth import verify_password_pbkdf2
+    if not verify_password_pbkdf2(password, user.get("password_hash", ""), user.get("password_salt", "")):
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+
+    # Generate JWT token
+    import jwt as pyjwt
+    from datetime import datetime, timedelta, timezone
+    token = pyjwt.encode(
+        {
+            "user_id": user["id"],
+            "email": user["email"],
+            "is_admin": int(user.get("is_admin", 0)),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=24)
+        },
+        settings.jwt_secret,
+        algorithm="HS256"
+    )
 
     return {
         "user_id": user["id"],
         "email": user["email"],
-        "api_key": user["api_key"]
+        "api_key": user["api_key"],
+        "is_admin": int(user.get("is_admin", 0)),
+        "token": token
     }
 
 
@@ -234,6 +289,7 @@ def get_me(request: Request, x_api_key: str | None = Header(None)):
         "id": user["id"],
         "email": user["email"],
         "api_key": user["api_key"],
+        "is_admin": int(user.get("is_admin", 0)),
         "instagram_account_id": user.get("instagram_account_id") or "",
         "instagram_access_token": user.get("instagram_access_token") or "",
         "default_caption_suffix": user.get("default_caption_suffix") or "",
@@ -276,6 +332,133 @@ async def update_instagram_credentials(request: Request, x_api_key: str | None =
         "status": "success",
         "message": "Credenciais do Instagram salvas com sucesso!",
         "instagram_account_id": account_id
+    }
+
+
+# --- ADMIN USER MANAGEMENT ENDPOINTS ---
+
+@app.get("/api/v1/admin/users")
+def list_all_users(request: Request, x_api_key: str | None = Header(None)):
+    admin = require_admin(request, x_api_key)
+    repo = get_repo()
+    users = repo.get_all_users()
+    # Sanitize: remove password_hash and password_salt from response
+    safe_users = []
+    for u in users:
+        safe = {k: v for k, v in u.items() if k not in ("password_hash", "password_salt")}
+        safe_users.append(safe)
+    return {"users": safe_users}
+
+
+@app.post("/api/v1/admin/users")
+async def create_new_user(request: Request, x_api_key: str | None = Header(None)):
+    admin = require_admin(request, x_api_key)
+    body = await request.json()
+    email = body.get("email", "").strip()
+    password = body.get("password", "").strip()
+    is_admin = 1 if body.get("is_admin") in (True, 1, "true", "1") else 0
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="E-mail e senha são obrigatórios.")
+
+    repo = get_repo()
+    existing = repo.get_user_by_email(email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
+
+    from src.auth import hash_password_pbkdf2, generate_api_key
+    pwd_hash, pwd_salt = hash_password_pbkdf2(password)
+    new_user = repo.create_user(
+        email=email,
+        password_hash=pwd_hash,
+        password_salt=pwd_salt,
+        api_key=generate_api_key(),
+        is_admin=is_admin,
+        is_active=1
+    )
+
+    safe = {k: v for k, v in new_user.items() if k not in ("password_hash", "password_salt")}
+    return {"status": "success", "message": "Usuário criado com sucesso!", "user": safe}
+
+
+@app.post("/api/v1/admin/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, request: Request, x_api_key: str | None = Header(None)):
+    admin = require_admin(request, x_api_key)
+    body = await request.json()
+    new_password = body.get("password", "").strip()
+
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 6 caracteres.")
+
+    repo = get_repo()
+    target = repo.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    from src.auth import hash_password_pbkdf2
+    pwd_hash, pwd_salt = hash_password_pbkdf2(new_password)
+    repo.update_user_password(user_id, pwd_hash, pwd_salt)
+
+    return {"status": "success", "message": "Senha redefinida com sucesso!"}
+
+
+@app.post("/api/v1/admin/users/{user_id}/regenerate-key")
+def regenerate_user_key(user_id: str, request: Request, x_api_key: str | None = Header(None)):
+    admin = require_admin(request, x_api_key)
+    repo = get_repo()
+    target = repo.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    from src.auth import generate_api_key
+    new_key = generate_api_key()
+    repo.regenerate_user_api_key(user_id, new_key)
+
+    return {"status": "success", "message": "API Key regenerada com sucesso!", "api_key": new_key}
+
+
+@app.post("/api/v1/admin/users/{user_id}/toggle-active")
+async def toggle_user_status(user_id: str, request: Request, x_api_key: str | None = Header(None)):
+    admin = require_admin(request, x_api_key)
+    body = await request.json()
+    is_active = 1 if body.get("is_active") in (True, 1, "true", "1") else 0
+
+    repo = get_repo()
+    target = repo.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    if target["id"] == admin["id"] and is_active == 0:
+        raise HTTPException(status_code=400, detail="Você não pode bloquear sua própria conta.")
+
+    repo.toggle_user_active(user_id, is_active)
+
+    return {"status": "success", "message": "Status do usuário atualizado!", "is_active": is_active}
+
+
+# --- META DATA DELETION CALLBACK ---
+
+@app.post("/api/v1/auth/instagram/data-deletion")
+async def meta_data_deletion_callback(request: Request):
+    """
+    Meta/Instagram Data Deletion Callback endpoint.
+    Returns a confirmation code and URL per Meta's requirements.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        from urllib.parse import parse_qs
+        raw = (await request.body()).decode("utf-8")
+        body = parse_qs(raw)
+        body = {k: v[0] if isinstance(v, list) else v for k, v in body.items()}
+
+    import uuid
+    confirmation_code = str(uuid.uuid4())
+    logging.info(f"Meta Data Deletion request received: {body}. Confirmation code: {confirmation_code}")
+
+    return {
+        "url": f"/data-deletion?code={confirmation_code}",
+        "confirmation_code": confirmation_code
     }
 
 

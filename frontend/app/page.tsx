@@ -23,9 +23,14 @@ import {
   Play,
   Eye,
   Clock,
-  Zap,
-  CheckCircle2
+  Users,
+  Key,
+  Shield,
+  UserPlus,
+  Lock
 } from 'lucide-react'
+
+import UserManagementTab from '../components/UserManagementTab'
 
 interface Job {
   id: string
@@ -61,11 +66,12 @@ interface Metrics {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'cloner' | 'calendar' | 'editor' | 'library'>('cloner')
+  const [activeTab, setActiveTab] = useState<'cloner' | 'calendar' | 'editor' | 'library' | 'users'>('cloner')
 
   // Auth & Settings state
   const [apiKey, setApiKey] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [copied, setCopied] = useState(false)
   
   // Custom Settings
@@ -191,6 +197,7 @@ export default function DashboardPage() {
         setDefaultCaptionSuffix(data.default_caption_suffix || '')
         setShareToFeed(Boolean(data.share_to_feed))
         setIntervalHours(data.default_post_interval_hours || 3)
+        setIsAdmin(Boolean(data.is_admin))
       }
     } catch (e) {
       console.error(e)
@@ -883,6 +890,11 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* TAB 5: 👥 GESTÃO DE USUÁRIOS (ADMIN) */}
+        {activeTab === 'users' && isAdmin && (
+          <UserManagementTab apiKey={apiKey} />
+        )}
+
       </main>
 
       {/* MOBILE BOTTOM NAVIGATION BAR (FIXED) */}
@@ -920,6 +932,16 @@ export default function DashboardPage() {
             <Video className="w-5 h-5" />
             <span className="text-[10px] font-medium">Biblioteca</span>
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'users' ? 'text-amber-400' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              <Users className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Usuários</span>
+            </button>
+          )}
 
         </div>
       </nav>

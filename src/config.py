@@ -34,6 +34,9 @@ class Settings:
     instagram_account_id: str = ""
     instagram_access_token: str = ""
     webhook_verify_token: str = "reels_cloner_token_123"
+    admin_email: str = ""
+    admin_password: str = ""
+    jwt_secret: str = "reels_cloner_jwt_secret_change_me"
 
 
 def get_settings() -> Settings:
@@ -75,4 +78,7 @@ def get_settings() -> Settings:
         instagram_account_id=os.getenv("INSTAGRAM_ACCOUNT_ID", ""),
         instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),
         webhook_verify_token=os.getenv("WEBHOOK_VERIFY_TOKEN", "reels_cloner_token_123"),
+        admin_email=os.getenv("ADMIN_EMAIL", ""),
+        admin_password=os.getenv("ADMIN_PASSWORD", ""),
+        jwt_secret=os.getenv("JWT_SECRET", "reels_cloner_jwt_secret_change_me"),
     )

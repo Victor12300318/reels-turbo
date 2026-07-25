@@ -31,35 +31,58 @@ class VideoProcessor:
 
     def adjust_duration(self, video_path: str, target_duration: float, output_path: str) -> str:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        current_duration = ffmpeg_utils.get_duration(video_path)
 
-        if current_duration < target_duration:
-            loops = math.ceil(target_duration / current_duration)
-            concat_list_path = str(Path(output_path).parent / "concat_list.txt")
-            abs_video_path = str(Path(video_path).resolve())
-            with open(concat_list_path, "w", encoding="utf-8") as f:
-                for _ in range(loops):
-                    f.write(f"file '{abs_video_path.replace(chr(39), chr(39)+chr(39))}'\n")
-            ffmpeg_utils.run_ffmpeg([
-                "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_list_path,
-                "-c", "copy",
-                "-an",
-                "-t", str(target_duration),
-                output_path,
-            ])
-            os.remove(concat_list_path)
-        else:
-            ffmpeg_utils.run_ffmpeg([
-                "-y",
-                "-i", video_path,
-                "-c", "copy",
-                "-an",
-                "-t", str(target_duration),
-                output_path,
-            ])
+        local_input_path = video_path
+        temp_downloaded = False
+        if video_path.startswith(("http://", "https://")):
+            import httpx, tempfile
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            with httpx.stream("GET", video_path, follow_redirects=True, timeout=120.0) as r:
+                r.raise_for_status()
+                with open(temp_file.name, "wb") as tf:
+                    for chunk in r.iter_bytes(chunk_size=65536):
+                        tf.write(chunk)
+            local_input_path = temp_file.name
+            temp_downloaded = True
+
+        try:
+            current_duration = ffmpeg_utils.get_duration(local_input_path)
+
+            if current_duration < target_duration and current_duration > 0:
+                loops = math.ceil(target_duration / current_duration)
+                concat_list_path = str(Path(output_path).parent / f"concat_list_{os.getpid()}.txt")
+                abs_video_path = str(Path(local_input_path).resolve())
+                with open(concat_list_path, "w", encoding="utf-8") as f:
+                    for _ in range(loops):
+                        f.write(f"file '{abs_video_path.replace(chr(39), chr(39)+chr(39))}'\n")
+                ffmpeg_utils.run_ffmpeg([
+                    "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_list_path,
+                    "-c", "copy",
+                    "-an",
+                    "-t", str(target_duration),
+                    output_path,
+                ])
+                if os.path.exists(concat_list_path):
+                    os.remove(concat_list_path)
+            else:
+                ffmpeg_utils.run_ffmpeg([
+                    "-y",
+                    "-i", local_input_path,
+                    "-c", "copy",
+                    "-an",
+                    "-t", str(target_duration),
+                    output_path,
+                ])
+        finally:
+            if temp_downloaded and os.path.exists(local_input_path):
+                try:
+                    os.remove(local_input_path)
+                except Exception:
+                    pass
+
         return output_path
 
     def render_final_video(

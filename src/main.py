@@ -110,8 +110,22 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
         str(Path(settings.data_dir) / "adjusted.mp4"),
     )
 
-    middle_frame = Image.open(winner["frame_paths"][len(winner["frame_paths"]) // 2])
-    face_position = analyzer.detect_face_position(middle_frame)
+    frame_paths_list = winner.get("frame_paths") or []
+    if not frame_paths_list:
+        try:
+            winner_dur = ffmpeg_utils.get_duration(winner["path"])
+            frame_paths_list = ffmpeg_utils.extract_frames(winner["path"], [max(winner_dur / 2.0, 0.1)], str(Path(settings.data_dir) / "frames"))
+        except Exception as ef:
+            logging.warning(f"Could not extract fallback frame for winner video: {ef}")
+
+    if frame_paths_list:
+        middle_frame = Image.open(frame_paths_list[len(frame_paths_list) // 2])
+        try:
+            face_position = analyzer.detect_face_position(middle_frame)
+        finally:
+            middle_frame.close()
+    else:
+        face_position = "bottom"
 
     output_name = f"{Path(reference_path).stem}_final.mp4"
     output_path = Path(output_dir or Path(settings.data_dir) / "output") / output_name

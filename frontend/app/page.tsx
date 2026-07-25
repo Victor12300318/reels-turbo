@@ -25,6 +25,7 @@ import {
   Clock,
   Zap,
   Users,
+  CheckCircle2,
   Key,
   Shield,
   UserPlus,
@@ -402,37 +403,68 @@ export default function DashboardPage() {
     setUploading(true)
 
     const fileList = Array.from(files).slice(0, 30)
-    setUploadMessage(`Enviando ${fileList.length} vídeo(s) para o S3...`)
-
+    const total = fileList.length
+    let completedCount = 0
     let successCount = 0
-    for (const file of fileList) {
-      try {
-        setUploadMessage(`Enviando ${file.name} para o S3...`)
-        const res = await fetch(`${API_BASE}/videos/upload-stream?filename=${encodeURIComponent(file.name)}`, {
-          method: 'POST',
-          headers: {
-            'X-API-Key': apiKey,
-            'Content-Type': file.type || 'video/mp4'
-          },
-          body: file
-        })
-        if (res.ok) {
-          successCount++
+
+    setUploadMessage(`Iniciando upload de ${total} vídeo(s)... (0/${total})`)
+
+    const uploadSingleFile = async (file: File) => {
+      let attempts = 0
+      const maxAttempts = 3
+      while (attempts < maxAttempts) {
+        attempts++
+        try {
+          const res = await fetch(`${API_BASE}/videos/upload-stream?filename=${encodeURIComponent(file.name)}`, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': apiKey,
+              'Content-Type': file.type || 'video/mp4'
+            },
+            body: file
+          })
+          if (res.ok) {
+            successCount++
+            break
+          }
+        } catch (err: any) {
+          console.error(`Erro ao enviar ${file.name} (tentativa ${attempts}/${maxAttempts}):`, err)
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000))
+          }
         }
-      } catch (err: any) {
-        console.error(`Erro ao enviar ${file.name}:`, err)
+      }
+      completedCount++
+      setUploadMessage(`Enviando vídeos para S3... (${completedCount}/${total} concluído(s))`)
+    }
+
+    const queue = [...fileList]
+    const activeWorkers: Promise<void>[] = []
+    const CONCURRENCY_LIMIT = 3
+
+    while (queue.length > 0 || activeWorkers.length > 0) {
+      while (queue.length > 0 && activeWorkers.length < CONCURRENCY_LIMIT) {
+        const nextFile = queue.shift()!
+        const promise: Promise<void> = uploadSingleFile(nextFile).then(() => {
+          const idx = activeWorkers.indexOf(promise)
+          if (idx !== -1) activeWorkers.splice(idx, 1)
+        })
+        activeWorkers.push(promise)
+      }
+      if (activeWorkers.length > 0) {
+        await Promise.race(activeWorkers)
       }
     }
 
     if (successCount > 0) {
-      setUploadMessage(`${successCount} vídeo(s) enviado(s) para o S3 com sucesso! Salvo(s) na biblioteca.`)
+      setUploadMessage(`✅ ${successCount} de ${total} vídeo(s) enviado(s) para o S3 com sucesso!`)
       await fetchVideos(apiKey)
     } else {
-      setUploadMessage('Falha ao enviar os vídeos para o S3. Tente novamente.')
+      setUploadMessage('❌ Falha ao enviar os vídeos para o S3. Tente novamente.')
     }
 
     setUploading(false)
-    setTimeout(() => setUploadMessage(''), 4000)
+    setTimeout(() => setUploadMessage(''), 5000)
   }
 
   const toggleJobSelection = (id: string) => {

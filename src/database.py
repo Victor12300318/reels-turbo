@@ -337,41 +337,46 @@ class VideoRepository:
 
     # --- VIDEO OPERATIONS ---
     def upsert(self, video: dict[str, Any], user_id: str | None = None) -> None:
-        frame_paths = video.get("frame_paths", [])
-        if isinstance(frame_paths, list):
-            frame_paths = json.dumps(frame_paths)
-        
+        self.upsert_batch([video], user_id=user_id)
+
+    def upsert_batch(self, videos: list[dict[str, Any]], user_id: str | None = None) -> None:
+        if not videos:
+            return
         ph = self._ph(10)
         conn = self._connect()
         try:
             with conn:
-                conn.execute(f"""
-                    INSERT INTO videos (
-                        path, filename, description, themes, orientation,
-                        duration_seconds, has_face, frame_paths, updated_at, user_id
-                    ) VALUES ({ph})
-                    ON CONFLICT(path) DO UPDATE SET
-                        filename=EXCLUDED.filename,
-                        description=EXCLUDED.description,
-                        themes=EXCLUDED.themes,
-                        orientation=EXCLUDED.orientation,
-                        duration_seconds=EXCLUDED.duration_seconds,
-                        has_face=EXCLUDED.has_face,
-                        frame_paths=EXCLUDED.frame_paths,
-                        updated_at=EXCLUDED.updated_at,
-                        user_id=EXCLUDED.user_id
-                """, (
-                    video["path"],
-                    video["filename"],
-                    video.get("description", ""),
-                    video.get("themes", ""),
-                    video.get("orientation", ""),
-                    video.get("duration_seconds", 0.0),
-                    int(video.get("has_face", 0)),
-                    frame_paths,
-                    datetime.now(timezone.utc).isoformat(),
-                    user_id or video.get("user_id"),
-                ))
+                for video in videos:
+                    frame_paths = video.get("frame_paths", [])
+                    if isinstance(frame_paths, list):
+                        frame_paths = json.dumps(frame_paths)
+                    conn.execute(f"""
+                        INSERT INTO videos (
+                            path, filename, description, themes, orientation,
+                            duration_seconds, has_face, frame_paths, updated_at, user_id
+                        ) VALUES ({ph})
+                        ON CONFLICT(path) DO UPDATE SET
+                            filename=EXCLUDED.filename,
+                            description=EXCLUDED.description,
+                            themes=EXCLUDED.themes,
+                            orientation=EXCLUDED.orientation,
+                            duration_seconds=EXCLUDED.duration_seconds,
+                            has_face=EXCLUDED.has_face,
+                            frame_paths=EXCLUDED.frame_paths,
+                            updated_at=EXCLUDED.updated_at,
+                            user_id=EXCLUDED.user_id
+                    """, (
+                        video["path"],
+                        video["filename"],
+                        video.get("description", ""),
+                        video.get("themes", ""),
+                        video.get("orientation", ""),
+                        video.get("duration_seconds", 0.0),
+                        int(video.get("has_face", 0)),
+                        frame_paths,
+                        datetime.now(timezone.utc).isoformat(),
+                        user_id or video.get("user_id"),
+                    ))
         finally:
             conn.close()
 

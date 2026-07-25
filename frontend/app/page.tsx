@@ -122,6 +122,13 @@ export default function DashboardPage() {
   const [newScheduleTime, setNewScheduleTime] = useState('')
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  // Publishing state
+  const [publishingJobId, setPublishingJobId] = useState<string | null>(null)
+
+  // Feed Performance & Lazy Loading state
+  const [visibleJobsCount, setVisibleJobsCount] = useState<number>(6)
+  const [activeVideoPlayerId, setActiveVideoPlayerId] = useState<string | null>(null)
+
   const completedJobIdsRef = useRef<Set<string>>(new Set())
   const API_BASE = '/api/v1'
 
@@ -149,8 +156,12 @@ export default function DashboardPage() {
       }
     }
 
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {})
+      }
+    } catch (e) {
+      // Ignore notification permission request error on mobile Safari
     }
 
     fetchInitialData(key)
@@ -299,11 +310,15 @@ export default function DashboardPage() {
   }
 
   const notifyBrowser = (job: Job) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Reels Clonado com Sucesso', {
-        body: 'Seu vídeo foi renderizado e está pronto no seu painel.',
-        icon: '/favicon.ico'
-      })
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Reels Clonado com Sucesso', {
+          body: 'Seu vídeo foi renderizado e está pronto no seu painel.',
+          icon: '/favicon.ico'
+        })
+      }
+    } catch (e) {
+      console.warn('Browser notification not supported:', e)
     }
   }
 
@@ -369,6 +384,8 @@ export default function DashboardPage() {
   }
 
   const handlePublishNow = async (jobId: string) => {
+    if (publishingJobId) return
+    setPublishingJobId(jobId)
     try {
       const res = await fetch(`${API_BASE}/jobs/${jobId}/publish`, {
         method: 'POST',
@@ -384,6 +401,8 @@ export default function DashboardPage() {
       }
     } catch (e: any) {
       alert(`Erro de conexão: ${e.message}`)
+    } finally {
+      setPublishingJobId(null)
     }
   }
 
@@ -794,134 +813,180 @@ export default function DashboardPage() {
                     <p className="text-xs text-slate-500 max-w-sm mx-auto">Cole um link no campo acima para gerar um novo Reels a partir da sua biblioteca local.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {jobs.map((job) => {
-                      const currentMode = playerMode[job.id] || 'ia'
-                      const videoSrc = currentMode === 'ia' ? job.output_path : (job.original_s3_url || job.url)
-                      const isReadyOrScheduled = (job.status === 'completed' || job.status === 'scheduled') && Boolean(job.output_path)
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {jobs.slice(0, visibleJobsCount).map((job) => {
+                        const currentMode = playerMode[job.id] || 'ia'
+                        const videoSrc = currentMode === 'ia' ? job.output_path : (job.original_s3_url || job.url)
+                        const isReadyOrScheduled = (job.status === 'completed' || job.status === 'scheduled') && Boolean(job.output_path)
 
-                      return (
-                        <div key={job.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3.5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
-                          {/* CARD STATUS BADGE */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-mono text-slate-600 truncate max-w-[180px]" title={job.url}>
-                                {job.url}
-                              </span>
-                              {job.status === 'completed' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
-                                  <CheckCircle2 className="w-3 h-3" /> Pronto
+                        return (
+                          <div key={job.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3.5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
+                            {/* CARD STATUS BADGE */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-mono text-slate-600 truncate max-w-[170px]" title={job.url}>
+                                  {job.url}
                                 </span>
-                              )}
-                              {job.status === 'scheduled' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shrink-0" title={job.scheduled_at}>
-                                  <Clock className="w-3 h-3" /> Agendado ({formatScheduledTime(job.scheduled_at)})
-                                </span>
-                              )}
+                                {job.posted_at ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Postado
+                                  </span>
+                                ) : job.status === 'scheduled' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shrink-0" title={job.scheduled_at}>
+                                    <Clock className="w-3 h-3 text-amber-600" /> Agendado ({formatScheduledTime(job.scheduled_at)})
+                                  </span>
+                                ) : job.status === 'completed' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066FF] border border-blue-200 flex items-center gap-1 shrink-0">
+                                    <CheckCircle2 className="w-3 h-3 text-[#0066FF]" /> Pronto para Postar
+                                  </span>
+                                ) : job.status === 'processing' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066FF] border border-blue-200 animate-pulse flex items-center gap-1 shrink-0">
+                                    <RefreshCw className="w-3 h-3 animate-spin" /> {job.progress || 10}%
+                                  </span>
+                                ) : job.status === 'failed' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shrink-0">
+                                    <AlertCircle className="w-3 h-3 text-rose-600" /> Falhou
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* PROCESSING PROGRESS BAR */}
                               {job.status === 'processing' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066FF] border border-blue-200 animate-pulse flex items-center gap-1 shrink-0">
-                                  <RefreshCw className="w-3 h-3 animate-spin" /> {job.progress || 10}%
-                                </span>
+                                <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                  <div className="flex justify-between text-[10px] text-slate-600 font-medium">
+                                    <span>Renderizando com IA...</span>
+                                    <span>{job.progress || 10}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                    <div
+                                      className="bg-[#0066FF] h-full rounded-full transition-all duration-500"
+                                      style={{ width: `${Math.max(job.progress || 10, 8)}%` }}
+                                    />
+                                  </div>
+                                </div>
                               )}
-                              {job.status === 'failed' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shrink-0">
-                                  <AlertCircle className="w-3 h-3" /> Falhou
-                                </span>
+
+                              {/* 9:16 VERTICAL VIDEO PLAYER (LAZY LOADED ON DEMAND) */}
+                              {isReadyOrScheduled && (
+                                <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-[9/16] max-h-[380px] w-full mx-auto border border-slate-200 shadow-inner flex items-center justify-center">
+                                  {activeVideoPlayerId === job.id ? (
+                                    <>
+                                      {job.output_path.startsWith('http') ? (
+                                        <video
+                                          src={videoSrc}
+                                          controls
+                                          autoPlay
+                                          preload="metadata"
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="p-4 text-center space-y-2 text-white">
+                                          <Play className="w-8 h-8 text-white/80 mx-auto" />
+                                          <p className="text-xs text-slate-300">Vídeo gerado e pronto.</p>
+                                        </div>
+                                      )}
+
+                                      {/* IA vs ORIGINAL COMPARISON TOGGLE */}
+                                      <div className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-md rounded-lg p-1 border border-slate-200 flex text-[10px] shadow-md z-10">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setPlayerMode(p => ({ ...p, [job.id]: 'ia' })) }}
+                                          className={`px-2 py-1 rounded-md font-bold transition-all ${
+                                            currentMode === 'ia' ? 'bg-[#0066FF] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          IA Clone
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setPlayerMode(p => ({ ...p, [job.id]: 'original' })) }}
+                                          className={`px-2 py-1 rounded-md font-bold transition-all ${
+                                            currentMode === 'original' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          Original
+                                        </button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    /* PREVIEW PLACEHOLDER BUTTON - LAZY LOADS VIDEO ON TAP */
+                                    <button
+                                      onClick={() => setActiveVideoPlayerId(job.id)}
+                                      className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-gradient-to-b from-slate-800 to-slate-950 text-white hover:from-slate-700 hover:to-slate-900 transition-all group cursor-pointer"
+                                    >
+                                      <div className="w-14 h-14 rounded-full bg-[#0066FF] text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <Play className="w-7 h-7 fill-current ml-0.5" />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-bold text-white">Ver Prévia em Vídeo (9:16)</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">Clique para carregar e reproduzir</p>
+                                      </div>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
 
-                            {/* PROCESSING PROGRESS BAR */}
-                            {job.status === 'processing' && (
-                              <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                                <div className="flex justify-between text-[10px] text-slate-600 font-medium">
-                                  <span>Renderizando com IA...</span>
-                                  <span>{job.progress || 10}%</span>
-                                </div>
-                                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                                  <div
-                                    className="bg-[#0066FF] h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${Math.max(job.progress || 10, 8)}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {/* 9:16 VERTICAL VIDEO PLAYER */}
+                            {/* ACTION BUTTONS (COMPLETED & SCHEDULED) */}
                             {isReadyOrScheduled && (
-                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[380px] w-full mx-auto border border-slate-200 shadow-inner flex items-center justify-center">
-                                {job.output_path.startsWith('http') ? (
-                                  <video
-                                    src={videoSrc}
-                                    controls
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="p-4 text-center space-y-2">
-                                    <Play className="w-8 h-8 text-white/80 mx-auto" />
-                                    <p className="text-xs text-slate-300">Vídeo gerado e pronto.</p>
-                                  </div>
+                              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                                <button
+                                  onClick={() => handlePublishNow(job.id)}
+                                  disabled={publishingJobId === job.id}
+                                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all"
+                                >
+                                  {publishingJobId === job.id ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Publicando...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="w-3.5 h-3.5" />
+                                      <span>Postar Agora</span>
+                                    </>
+                                  )}
+                                </button>
+                                {job.status === 'scheduled' && (
+                                  <button
+                                    onClick={() => openEditScheduleModal(job)}
+                                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2.5 text-xs font-bold border border-amber-200 transition-all shrink-0"
+                                    title="Editar ou Cancelar Agendamento"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Editar</span>
+                                  </button>
                                 )}
-
-                                {/* IA vs ORIGINAL COMPARISON TOGGLE */}
-                                <div className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-md rounded-lg p-1 border border-slate-200 flex text-[10px] shadow-md">
-                                  <button
-                                    onClick={() => setPlayerMode(p => ({ ...p, [job.id]: 'ia' }))}
-                                    className={`px-2 py-1 rounded-md font-bold transition-all ${
-                                      currentMode === 'ia' ? 'bg-[#0066FF] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                                    }`}
+                                {job.output_path && (
+                                  <a
+                                    href={job.output_path.startsWith('http') ? job.output_path : `${API_BASE}/jobs/${job.id}/download`}
+                                    download
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 text-xs font-semibold border border-slate-200 transition-all"
+                                    title="Baixar MP4"
                                   >
-                                    IA Clone
-                                  </button>
-                                  <button
-                                    onClick={() => setPlayerMode(p => ({ ...p, [job.id]: 'original' }))}
-                                    className={`px-2 py-1 rounded-md font-bold transition-all ${
-                                      currentMode === 'original' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                  >
-                                    Original
-                                  </button>
-                                </div>
+                                    <Download className="w-4 h-4 text-slate-700" />
+                                  </a>
+                                )}
                               </div>
                             )}
                           </div>
+                        )
+                      })}
+                    </div>
 
-                          {/* ACTION BUTTONS (COMPLETED & SCHEDULED) */}
-                          {isReadyOrScheduled && (
-                            <div className="flex gap-2 pt-2 border-t border-slate-100">
-                              <button
-                                onClick={() => handlePublishNow(job.id)}
-                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
-                              >
-                                <Send className="w-3.5 h-3.5" /> Postar Agora
-                              </button>
-                              {job.status === 'scheduled' && (
-                                <button
-                                  onClick={() => openEditScheduleModal(job)}
-                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2.5 text-xs font-bold border border-amber-200 transition-all shrink-0"
-                                  title="Editar ou Cancelar Agendamento"
-                                >
-                                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>Editar</span>
-                                </button>
-                              )}
-                              {job.output_path && (
-                                <a
-                                  href={job.output_path.startsWith('http') ? job.output_path : `${API_BASE}/jobs/${job.id}/download`}
-                                  download
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 text-xs font-semibold border border-slate-200 transition-all"
-                                  title="Baixar MP4"
-                                >
-                                  <Download className="w-4 h-4 text-slate-700" />
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                    {/* PAGINATION / LOAD MORE BUTTON */}
+                    {jobs.length > visibleJobsCount && (
+                      <div className="text-center pt-4">
+                        <button
+                          onClick={() => setVisibleJobsCount(prev => prev + 6)}
+                          className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                        >
+                          <span>Carregar mais vídeos (Exibindo {Math.min(visibleJobsCount, jobs.length)} de {jobs.length})</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1027,14 +1092,29 @@ export default function DashboardPage() {
 
                             {/* PLAYER 9:16 IN CALENDAR TAB */}
                             {j.output_path && (
-                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[340px] w-full mx-auto border border-slate-200 flex items-center justify-center">
-                                {j.output_path.startsWith('http') ? (
-                                  <video src={videoSrc} controls className="w-full h-full object-cover" />
+                              <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-[9/16] max-h-[340px] w-full mx-auto border border-slate-200 flex items-center justify-center">
+                                {activeVideoPlayerId === j.id ? (
+                                  j.output_path.startsWith('http') ? (
+                                    <video src={videoSrc} controls autoPlay preload="metadata" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="p-4 text-center space-y-2 text-white">
+                                      <Play className="w-8 h-8 text-amber-500 mx-auto" />
+                                      <p className="text-xs text-slate-300">Vídeo agendado pronto para prévia.</p>
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="p-4 text-center space-y-2">
-                                    <Play className="w-8 h-8 text-amber-500 mx-auto" />
-                                    <p className="text-xs text-slate-300">Vídeo agendado pronto para prévia.</p>
-                                  </div>
+                                  <button
+                                    onClick={() => setActiveVideoPlayerId(j.id)}
+                                    className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-gradient-to-b from-slate-800 to-slate-950 text-white hover:from-slate-700 hover:to-slate-900 transition-all group cursor-pointer"
+                                  >
+                                    <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                      <Play className="w-6 h-6 fill-current ml-0.5" />
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-bold text-white">Ver Prévia (9:16)</p>
+                                      <p className="text-[10px] text-slate-400 mt-0.5">Clique para carregar e reproduzir</p>
+                                    </div>
+                                  </button>
                                 )}
                               </div>
                             )}
@@ -1044,9 +1124,20 @@ export default function DashboardPage() {
                           <div className="flex gap-2 pt-2 border-t border-slate-100">
                             <button
                               onClick={() => handlePublishNow(j.id)}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
+                              disabled={publishingJobId === j.id}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2 text-xs font-bold shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all"
                             >
-                              <Send className="w-3.5 h-3.5" /> Postar Agora
+                              {publishingJobId === j.id ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Publicando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>Postar Agora</span>
+                                </>
+                              )}
                             </button>
                             <button
                               onClick={() => openEditScheduleModal(j)}

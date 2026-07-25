@@ -109,7 +109,35 @@ If no text is visible, return {"lines": []}.
             data = default_val
 
         lines = [str(line).strip() for line in data.get("lines", []) if str(line).strip()]
-        return "\\n".join(lines)
+        return "\n".join(lines)
+
+    def generate_headline_fallback(self, frames: list[Image.Image], description: str) -> str:
+        """
+        Gera uma legenda/headline impactante em português caso nenhum texto tenha sido detectado via OCR.
+        Garante que NENHUM vídeo seja renderizado sem texto na tela.
+        """
+        prompt = f"""
+Você está analisando este vídeo cuja descrição é: "{description}".
+Gere uma frase/headline curta, chamativa e viral (1 a 2 linhas em português) para ficar na tela do Reels.
+IMPORTANTE:
+- Não inclua emojis.
+- Seja direto, engajador e atraente.
+- Retorne apenas JSON com o campo "text".
+"""
+        schema = {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        }
+        try:
+            raw = self.client.analyze(frames, prompt, response_schema=schema)
+            data = _safe_parse_json(raw, {"text": "Confira este vídeo incrível!"})
+            txt = data.get("text", "").strip()
+            if txt:
+                return txt
+        except Exception as e:
+            logger.error(f"Erro ao gerar headline de fallback: {e}")
+        return "Confira esse conteúdo!"
 
     def detect_face_position(self, frame: Image.Image) -> str:
         prompt = """

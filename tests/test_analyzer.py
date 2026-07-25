@@ -18,7 +18,7 @@ def test_extract_text():
     analyzer = VideoAnalyzer(mock_client)
     img = Image.new("RGB", (10, 10))
     text = analyzer.extract_text([img, img])
-    assert text == "hello\\nworld"
+    assert text == "hello\nworld"
 
 
 def test_describe_video():

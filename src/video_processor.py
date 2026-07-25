@@ -138,6 +138,24 @@ def _sanitize_text_for_ffmpeg(text: str) -> str:
     return re.sub(r' +', ' ', sanitized)
 
 
+def _resolve_font_file(user_font_path: str | None = None) -> str:
+    if user_font_path and os.path.exists(user_font_path):
+        return user_font_path
+
+    candidates = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+    ]
+    for font in candidates:
+        if os.path.exists(font):
+            return font
+    return ""
+
+
 def _build_drawtext_filter(
     text: str,
     style: dict,
@@ -146,15 +164,27 @@ def _build_drawtext_filter(
     video_height: int,
     font_path: str,
 ) -> str:
+    # Garantia de texto: se o texto estiver vazio, define um padrão de engajamento
+    if not text or not text.strip():
+        text = "Confira esse conteúdo!"
+
     # Sanitiza o texto de emojis e caracteres especiais antes de formatar
     text = _sanitize_text_for_ffmpeg(text)
+    if not text.strip():
+        text = "Confira esse conteúdo!"
 
     max_line_chars = 32
     wrapped_text = _wrap_text(text, max_chars_per_line=max_line_chars)
     lines = [line.strip() for line in wrapped_text.split("\n") if line.strip()]
 
     if not lines:
-        return f"drawtext=fontfile={font_path}:text='':x=0:y=0"
+        lines = ["Confira esse conteúdo!"]
+
+    actual_font = _resolve_font_file(font_path)
+    font_param = ""
+    if actual_font:
+        escaped_font = actual_font.replace("\\", "/").replace(":", "\\:")
+        font_param = f"fontfile='{escaped_font}':"
 
     size_label = style.get("font_size_relative", "medium")
     base_ratio = SIZE_RATIOS.get(size_label, SIZE_RATIOS["medium"])
@@ -176,15 +206,13 @@ def _build_drawtext_filter(
     padding = int(video_height * (padding_pct / 100))
     
     if vertical == "bottom":
-        # Margem de segurança de ~16% para não ser coberta pela interface do Instagram Reels (nome de usuário, legenda, etc.)
         safe_padding = int(video_height * 0.16)
         padding = max(padding, safe_padding)
     elif vertical == "top":
-        # Margem de segurança de ~14% no topo para não ser coberta pelo header do Reels (botões, barra de status, etc.)
         safe_top_padding = int(video_height * 0.14)
         padding = max(padding, safe_top_padding)
     else:
-        padding = max(40, min(padding, 120))  # keep text within a reasonable margin
+        padding = max(40, min(padding, 120))
 
     line_spacing = int(font_size * 0.2)
     total_height = len(lines) * font_size + (len(lines) - 1) * line_spacing
@@ -207,7 +235,6 @@ def _build_drawtext_filter(
     if has_box:
         extras = "box=1:boxcolor=black@0.65:boxborderw=10"
     else:
-        # Sombreado grosso e profissional estilo Reels (Stroke / Borda espessa + Sombra 3D leve)
         border_w = max(4, int(font_size * 0.11))
         extras = f"bordercolor=black:borderw={border_w}:shadowcolor=black@0.4:shadowx=2:shadowy=2"
 
@@ -217,7 +244,7 @@ def _build_drawtext_filter(
         safe_line = line.replace("\\", "\\\\").replace("'", "'\\''").replace(":", "\\:")
         
         line_filter = (
-            f"drawtext=fontfile={font_path}:"
+            f"drawtext={font_param}"
             f"text='{safe_line}':"
             f"fontcolor={color}:fontsize={font_size}:"
             f"{extras}:"

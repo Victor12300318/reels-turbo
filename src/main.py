@@ -85,6 +85,10 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
 
     ref_description = analyzer.describe(ref_frames)
     on_screen_text = analyzer.extract_text(ref_frames)
+    if not on_screen_text or not on_screen_text.strip():
+        logging.info("Nenhum texto na tela extraído via OCR. Gerando headline de engajamento com a IA...")
+        on_screen_text = analyzer.generate_headline_fallback(ref_frames, ref_description.get("description", ""))
+
     text_style = analyzer.analyze_text_style(ref_frames)
 
     if progress_callback:

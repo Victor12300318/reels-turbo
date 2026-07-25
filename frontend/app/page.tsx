@@ -23,6 +23,7 @@ import {
   Play,
   Eye,
   Clock,
+  Zap,
   Users,
   Key,
   Shield,

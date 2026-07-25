@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Reels Cloner AI',
+  title: 'Clonify AI - Automação e Clonagem Inteligente de Reels',
   description: 'Plataforma para automação e clonagem de Reels do Instagram',
 }
 

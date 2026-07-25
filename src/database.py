@@ -248,6 +248,19 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def update_user_credentials(
+        self, user_id: str, email: str, password_hash: str, password_salt: str, is_admin: int = 1, is_active: int = 1
+    ) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE users SET email = {self._ph(1)}, password_hash = {self._ph(1)}, password_salt = {self._ph(1)}, is_admin = {self._ph(1)}, is_active = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (email, password_hash, password_salt, is_admin, is_active, user_id)
+                )
+        finally:
+            conn.close()
+
     def regenerate_user_api_key(self, user_id: str, new_api_key: str) -> None:
         conn = self._connect()
         try:

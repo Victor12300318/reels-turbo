@@ -75,16 +75,44 @@ def get_repo() -> VideoRepository:
         raise
 
 
-def get_or_create_default_user(repo: VideoRepository) -> dict:
+def sync_admin_user(repo: VideoRepository) -> dict:
     curr_settings = get_settings()
-    admin_email = curr_settings.admin_email or "admin@reels.com"
-    admin_password = curr_settings.admin_password or "admin123"
-    
-    admin = repo.get_user_by_email(admin_email)
+    admin_email = (curr_settings.admin_email or "admin@reels.com").strip()
+    admin_password = (curr_settings.admin_password or "admin123").strip()
+
+    if not admin_email or not admin_password:
+        return {}
+
     from src.auth import hash_password_pbkdf2, generate_api_key
-    
+
+    pwd_hash, pwd_salt = hash_password_pbkdf2(admin_password)
+
+    # 1. Search for user with the exact email configured in .env
+    admin = repo.get_user_by_email(admin_email)
+
+    # 2. If not found by exact email, check if there's any existing admin or default admin in database
     if not admin:
-        pwd_hash, pwd_salt = hash_password_pbkdf2(admin_password)
+        old_admin = repo.get_user_by_email("admin@reels.com")
+        if not old_admin:
+            all_users = repo.get_all_users()
+            admin_users = [u for u in all_users if u.get("is_admin") == 1]
+            if admin_users:
+                old_admin = admin_users[0]
+
+        if old_admin:
+            # Update existing admin record to new email & password from .env
+            repo.update_user_credentials(
+                user_id=old_admin["id"],
+                email=admin_email,
+                password_hash=pwd_hash,
+                password_salt=pwd_salt,
+                is_admin=1,
+                is_active=1
+            )
+            logging.info(f"Updated existing admin user ID {old_admin['id']} to email '{admin_email}' with new password from .env")
+            return repo.get_user_by_id(old_admin["id"]) or {}
+
+        # 3. No admin found anywhere -> create fresh user in DB
         admin = repo.create_user(
             email=admin_email,
             password_hash=pwd_hash,
@@ -93,18 +121,24 @@ def get_or_create_default_user(repo: VideoRepository) -> dict:
             is_admin=1,
             is_active=1
         )
-    else:
-        # Verify and update password if .env changed
-        from src.auth import verify_password_pbkdf2
-        if not verify_password_pbkdf2(admin_password, admin.get("password_hash", ""), admin.get("password_salt", "")):
-            pwd_hash, pwd_salt = hash_password_pbkdf2(admin_password)
-            repo.update_user_password(admin["id"], pwd_hash, pwd_salt)
-            admin["password_hash"] = pwd_hash
-            admin["password_salt"] = pwd_salt
-        # Ensure admin flag and active status are set
-        if not admin.get("is_admin") or not admin.get("is_active"):
-            repo.toggle_user_active(admin["id"], 1)
-    return admin
+        logging.info(f"Created new admin user '{admin_email}' in database from .env")
+        return admin
+
+    # 4. User exists with admin_email -> ALWAYS update password_hash, password_salt, is_admin=1, is_active=1
+    repo.update_user_credentials(
+        user_id=admin["id"],
+        email=admin_email,
+        password_hash=pwd_hash,
+        password_salt=pwd_salt,
+        is_admin=1,
+        is_active=1
+    )
+    logging.info(f"Synced credentials for admin user '{admin_email}' from .env")
+    return repo.get_user_by_id(admin["id"]) or {}
+
+
+# Alias for backward compatibility
+get_or_create_default_user = sync_admin_user
 
 
 def authenticate_request(request: Request, x_api_key: str | None = None) -> dict:
@@ -252,13 +286,10 @@ async def login(request: Request):
     email = body.get("email", "").strip()
     password = body.get("password", "").strip()
 
-    curr_settings = get_settings()
     repo = get_repo()
     
-    # Auto-seed/update default admin if email matches .env ADMIN_EMAIL or default
-    target_admin = curr_settings.admin_email or "admin@reels.com"
-    if email.lower() == target_admin.lower() or not repo.get_all_users():
-        get_or_create_default_user(repo)
+    # Always sync admin credentials from .env on login attempt
+    sync_admin_user(repo)
 
     user = repo.get_user_by_email(email)
 

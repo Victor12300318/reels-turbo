@@ -240,7 +240,8 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         ig_token = user.get("instagram_access_token") or settings.instagram_access_token
         user_caption = user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
         stf = bool(user.get("share_to_feed", 0))
-        interval_hours = user.get("default_post_interval_hours", 3)
+        raw_interval = user.get("default_post_interval_hours")
+        interval_hours = int(raw_interval) if raw_interval is not None else 3
 
         if ig_account_id and ig_token and public_url.startswith("http"):
             if interval_hours == 0:
@@ -257,6 +258,8 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
                         share_to_feed=stf
                     )
                     repo.mark_job_posted(job_id)
+                    if webhook_url:
+                        send_video_to_n8n(final_video_path, url, webhook_url)
                 except Exception as ig_err:
                     logging.error(f"[Job {job_id}] Immediate Instagram auto-post failed: {ig_err}")
             else:
@@ -292,8 +295,22 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
                 logging.info(f"[Job {job_id}] Auto-scheduled in queue for {sched_iso} (interval: {interval_hours}h)")
 
                 if next_slot <= now_utc:
-                    from src.scheduler import process_due_scheduled_jobs
-                    process_due_scheduled_jobs(repo)
+                    try:
+                        from src.instagram_publisher import InstagramPublisher
+                        logging.info(f"[Job {job_id}] First in queue - publishing now to Instagram...")
+                        publisher = InstagramPublisher()
+                        publisher.publish_reel(
+                            video_url=public_url,
+                            caption=user_caption,
+                            instagram_account_id=ig_account_id,
+                            access_token=ig_token,
+                            share_to_feed=stf
+                        )
+                        repo.mark_job_posted(job_id)
+                        if webhook_url:
+                            send_video_to_n8n(final_video_path, url, webhook_url)
+                    except Exception as ig_err:
+                        logging.error(f"[Job {job_id}] Auto-post for due slot failed: {ig_err}")
 
         if webhook_url:
             send_video_to_n8n(final_video_path, url, webhook_url)

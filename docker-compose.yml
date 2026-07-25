@@ -1,22 +1,4 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: reels-postgres
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-reels_db}
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-reels_db}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   reels-api:
     build: .
     container_name: reels-api
@@ -26,7 +8,7 @@ services:
       - .env
     environment:
       - LOCAL_VIDEOS_DIR=/app/videos
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-reels_db}}
+      - DATABASE_URL=${DATABASE_URL}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
       - S3_SECRET_KEY=${S3_SECRET_KEY}
       - S3_BUCKET=${S3_BUCKET:-reels-turbo}
@@ -42,9 +24,6 @@ services:
     volumes:
       - ./data:/app/data
     command: ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   reels-frontend:
     build:
@@ -58,7 +37,4 @@ services:
       - INTERNAL_API_URL=http://reels-api:8000
     depends_on:
       - reels-api
-
-volumes:
-  postgres_data:
 

@@ -40,6 +40,7 @@ class Settings:
 
 
 def get_settings() -> Settings:
+    load_dotenv()
     cookies_file = os.getenv("INSTAGRAM_COOKIES_FILE")
     if not cookies_file:
         possible_paths = ["data/cookies.txt", "/app/data/cookies.txt", "./data/cookies.txt"]

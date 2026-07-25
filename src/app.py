@@ -25,7 +25,13 @@ app = FastAPI(
 )
 
 @app.on_event("startup")
-async def start_background_scheduler():
+async def startup_event():
+    try:
+        repo = get_repo()
+        get_or_create_default_user(repo)
+    except Exception as e:
+        logging.error(f"Error seeding default admin user on startup: {e}")
+
     async def scheduler_loop():
         while True:
             try:
@@ -70,8 +76,9 @@ def get_repo() -> VideoRepository:
 
 
 def get_or_create_default_user(repo: VideoRepository) -> dict:
-    admin_email = settings.admin_email or "admin@reels.com"
-    admin_password = settings.admin_password or "admin123"
+    curr_settings = get_settings()
+    admin_email = curr_settings.admin_email or "admin@reels.com"
+    admin_password = curr_settings.admin_password or "admin123"
     
     admin = repo.get_user_by_email(admin_email)
     from src.auth import hash_password_pbkdf2, generate_api_key
@@ -94,8 +101,8 @@ def get_or_create_default_user(repo: VideoRepository) -> dict:
             repo.update_user_password(admin["id"], pwd_hash, pwd_salt)
             admin["password_hash"] = pwd_hash
             admin["password_salt"] = pwd_salt
-        # Ensure admin flag is set
-        if not admin.get("is_admin"):
+        # Ensure admin flag and active status are set
+        if not admin.get("is_admin") or not admin.get("is_active"):
             repo.toggle_user_active(admin["id"], 1)
     return admin
 
@@ -245,12 +252,15 @@ async def login(request: Request):
     email = body.get("email", "").strip()
     password = body.get("password", "").strip()
 
+    curr_settings = get_settings()
     repo = get_repo()
-    user = repo.get_user_by_email(email)
     
-    # Auto-seed default admin if database is completely empty and using .env admin email
-    if not user and email == (settings.admin_email or "admin@reels.com"):
-        user = get_or_create_default_user(repo)
+    # Auto-seed/update default admin if email matches .env ADMIN_EMAIL or default
+    target_admin = curr_settings.admin_email or "admin@reels.com"
+    if email.lower() == target_admin.lower() or not repo.get_all_users():
+        get_or_create_default_user(repo)
+
+    user = repo.get_user_by_email(email)
 
     if not user or not user.get("is_active", 1):
         raise HTTPException(status_code=401, detail="Conta inativa ou e-mail incorreto.")

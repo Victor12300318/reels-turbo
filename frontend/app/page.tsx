@@ -117,6 +117,11 @@ export default function DashboardPage() {
   const [cookieMessage, setCookieMessage] = useState('')
   const [cookieUploading, setCookieUploading] = useState(false)
 
+  // Edit Schedule Modal state
+  const [editingJob, setEditingJob] = useState<Job | null>(null)
+  const [newScheduleTime, setNewScheduleTime] = useState('')
+  const [savingSchedule, setSavingSchedule] = useState(false)
+
   const completedJobIdsRef = useRef<Set<string>>(new Set())
   const API_BASE = '/api/v1'
 
@@ -506,6 +511,69 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
+  const openEditScheduleModal = (job: Job) => {
+    setEditingJob(job)
+    if (job.scheduled_at) {
+      try {
+        const dt = new Date(job.scheduled_at)
+        const formatted = dt.toISOString().slice(0, 16)
+        setNewScheduleTime(formatted)
+      } catch (e) {
+        setNewScheduleTime('')
+      }
+    } else {
+      setNewScheduleTime('')
+    }
+  }
+
+  const handleUpdateScheduleTime = async () => {
+    if (!editingJob || !newScheduleTime) return
+    setSavingSchedule(true)
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${editingJob.id}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({ scheduled_at: newScheduleTime })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert('Horário de agendamento atualizado com sucesso!')
+        setEditingJob(null)
+        await fetchJobs(apiKey)
+      } else {
+        alert(`Erro ao atualizar: ${data.detail || 'Falha na requisição'}`)
+      }
+    } catch (e: any) {
+      alert(`Erro de conexão: ${e.message}`)
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
+
+  const handleCancelSchedule = async () => {
+    if (!editingJob) return
+    if (!confirm('Deseja realmente cancelar este agendamento? O vídeo retornará ao status de Pronto.')) return
+    setSavingSchedule(true)
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${editingJob.id}/schedule`, {
+        method: 'DELETE',
+        headers: { 'X-API-Key': apiKey }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert('Agendamento cancelado com sucesso!')
+        setEditingJob(null)
+        await fetchJobs(apiKey)
+      } else {
+        alert(`Erro ao cancelar: ${data.detail || 'Falha na requisição'}`)
+      }
+    } catch (e: any) {
+      alert(`Erro de conexão: ${e.message}`)
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
+
   const formatScheduledTime = (isoString?: string) => {
     if (!isoString) return 'Em breve'
     try {
@@ -826,6 +894,16 @@ export default function DashboardPage() {
                               >
                                 <Send className="w-3.5 h-3.5" /> Postar Agora
                               </button>
+                              {job.status === 'scheduled' && (
+                                <button
+                                  onClick={() => openEditScheduleModal(job)}
+                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2.5 text-xs font-bold border border-amber-200 transition-all shrink-0"
+                                  title="Editar ou Cancelar Agendamento"
+                                >
+                                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Editar</span>
+                                </button>
+                              )}
                               {job.output_path && (
                                 <a
                                   href={job.output_path.startsWith('http') ? job.output_path : `${API_BASE}/jobs/${job.id}/download`}
@@ -969,6 +1047,14 @@ export default function DashboardPage() {
                               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
                             >
                               <Send className="w-3.5 h-3.5" /> Postar Agora
+                            </button>
+                            <button
+                              onClick={() => openEditScheduleModal(j)}
+                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 text-xs font-bold border border-amber-200 transition-all shrink-0"
+                              title="Editar ou Cancelar Agendamento"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Editar</span>
                             </button>
                             {j.output_path && (
                               <a
@@ -1223,6 +1309,64 @@ export default function DashboardPage() {
           })}
         </div>
       </nav>
+
+      {/* EDIT SCHEDULE MODAL POPUP */}
+      {editingJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" /> Editar Agendamento
+              </h3>
+              <button
+                onClick={() => setEditingJob(null)}
+                className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-all"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-mono text-slate-600 truncate">{editingJob.url}</p>
+
+              {editingJob.output_path && (
+                <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[220px] w-full mx-auto border border-slate-200 flex items-center justify-center">
+                  <video src={editingJob.output_path} controls className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <div className="space-y-1.5 pt-2">
+                <label className="text-xs font-semibold text-slate-700">Nova Data e Horário de Publicação</label>
+                <input
+                  type="datetime-local"
+                  value={newScheduleTime}
+                  onChange={(e) => setNewScheduleTime(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={handleUpdateScheduleTime}
+                disabled={savingSchedule || !newScheduleTime}
+                className="w-full rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all"
+              >
+                {savingSchedule ? 'Salvando...' : 'Salvar Novo Horário'}
+              </button>
+
+              <button
+                onClick={handleCancelSchedule}
+                disabled={savingSchedule}
+                className="w-full rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2.5 text-xs font-bold disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Cancelar Agendamento</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

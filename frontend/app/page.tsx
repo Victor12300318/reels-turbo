@@ -699,7 +699,8 @@ export default function DashboardPage() {
                   <option value={1}>A cada 1 hora</option>
                   <option value={2}>A cada 2 horas</option>
                   <option value={3}>A cada 3 horas (Recomendado)</option>
-                  <option value={6}>A cada 6 horas</option>
+                  <option value={5}>A cada 5 horas</option>
+                  <option value={8}>A cada 8 horas</option>
                   <option value={12}>A cada 12 horas</option>
                   <option value={24}>A cada 24 horas (1 por dia)</option>
                 </select>
@@ -787,6 +788,26 @@ export default function DashboardPage() {
                   className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
                 />
                 <p className="text-[10px] text-slate-500">Esta assinatura é anexada automaticamente no final do texto do Reels.</p>
+              </div>
+
+              {/* AUTOMATIC POSTING INTERVAL */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Intervalo de Agendamento Automático (Fila)</label>
+                <select
+                  value={intervalHours}
+                  onChange={(e) => setIntervalHours(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value={0}>Postagem Imediata (Assim que ficar pronto)</option>
+                  <option value={1}>A cada 1 hora</option>
+                  <option value={2}>A cada 2 horas</option>
+                  <option value={3}>A cada 3 horas (Recomendado)</option>
+                  <option value={5}>A cada 5 horas</option>
+                  <option value={8}>A cada 8 horas</option>
+                  <option value={12}>A cada 12 horas</option>
+                  <option value={24}>A cada 24 horas (1 por dia)</option>
+                </select>
+                <p className="text-[10px] text-slate-500">Vídeos novos serão enfileirados e postados automaticamente com este espaçamento.</p>
               </div>
 
               {/* POST EXCLUSIVELY TO REELS TOGGLE */}

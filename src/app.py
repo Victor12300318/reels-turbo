@@ -234,27 +234,66 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         repo.update_job(job_id, status="completed", progress=100, output_path=public_url)
         logging.info(f"[Job {job_id}] Completed successfully: {public_url}")
 
-        # Auto-post to Instagram if credentials are set
+        # Auto-post or Auto-schedule queue to Instagram
         user = repo.get_user_by_id(user_id) or {}
         ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
         ig_token = user.get("instagram_access_token") or settings.instagram_access_token
         user_caption = user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
         stf = bool(user.get("share_to_feed", 0))
+        interval_hours = user.get("default_post_interval_hours", 3)
 
         if ig_account_id and ig_token and public_url.startswith("http"):
-            try:
-                from src.instagram_publisher import InstagramPublisher
-                logging.info(f"[Job {job_id}] Auto-posting Reels to Instagram account {ig_account_id} with caption '{user_caption}'...")
-                publisher = InstagramPublisher()
-                publisher.publish_reel(
-                    video_url=public_url,
+            if interval_hours == 0:
+                # Immediate posting
+                try:
+                    from src.instagram_publisher import InstagramPublisher
+                    logging.info(f"[Job {job_id}] Auto-posting Reels immediately to Instagram account {ig_account_id}...")
+                    publisher = InstagramPublisher()
+                    publisher.publish_reel(
+                        video_url=public_url,
+                        caption=user_caption,
+                        instagram_account_id=ig_account_id,
+                        access_token=ig_token,
+                        share_to_feed=stf
+                    )
+                    repo.mark_job_posted(job_id)
+                except Exception as ig_err:
+                    logging.error(f"[Job {job_id}] Immediate Instagram auto-post failed: {ig_err}")
+            else:
+                # Automatic Rolling Queue Scheduling
+                from datetime import datetime, timedelta, timezone
+                now_utc = datetime.now(timezone.utc)
+
+                user_jobs = repo.get_jobs_by_user(user_id)
+                scheduled_times = []
+                for j in user_jobs:
+                    if j.get("id") != job_id and j.get("scheduled_at"):
+                        try:
+                            dt = datetime.fromisoformat(j["scheduled_at"].replace("Z", "+00:00"))
+                            scheduled_times.append(dt)
+                        except Exception:
+                            pass
+
+                if scheduled_times:
+                    latest_scheduled = max(scheduled_times)
+                    next_slot = latest_scheduled + timedelta(hours=interval_hours)
+                    if next_slot < now_utc:
+                        next_slot = now_utc
+                else:
+                    next_slot = now_utc
+
+                sched_iso = next_slot.isoformat()
+                repo.update_job_schedule(
+                    job_id,
                     caption=user_caption,
-                    instagram_account_id=ig_account_id,
-                    access_token=ig_token,
-                    share_to_feed=stf
+                    scheduled_at=sched_iso,
+                    share_to_feed=int(stf)
                 )
-            except Exception as ig_err:
-                logging.error(f"[Job {job_id}] Instagram auto-post failed: {ig_err}")
+                logging.info(f"[Job {job_id}] Auto-scheduled in queue for {sched_iso} (interval: {interval_hours}h)")
+
+                if next_slot <= now_utc:
+                    from src.scheduler import process_due_scheduled_jobs
+                    process_due_scheduled_jobs(repo)
 
         if webhook_url:
             send_video_to_n8n(final_video_path, url, webhook_url)

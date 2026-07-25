@@ -1001,6 +1001,43 @@ def get_cookies_status(request: Request, x_api_key: str | None = Header(None)):
     }
 
 
+@app.get("/api/v1/admin/settings")
+def get_admin_settings(request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    if not user.get("is_admin", 0):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+
+    repo = get_repo()
+    all_settings = repo.get_all_system_settings()
+    return {
+        "ai_provider": all_settings.get("ai_provider", "gemini"),
+        "openrouter_api_key": all_settings.get("openrouter_api_key", ""),
+        "openrouter_model": all_settings.get("openrouter_model", "google/gemini-2.0-flash-001"),
+    }
+
+
+@app.post("/api/v1/admin/settings")
+async def save_admin_settings(request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    if not user.get("is_admin", 0):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+
+    body = await request.json()
+    repo = get_repo()
+
+    if "ai_provider" in body:
+        repo.set_system_setting("ai_provider", str(body["ai_provider"]))
+    if "openrouter_api_key" in body:
+        repo.set_system_setting("openrouter_api_key", str(body["openrouter_api_key"]))
+    if "openrouter_model" in body:
+        repo.set_system_setting("openrouter_model", str(body["openrouter_model"]))
+
+    return {
+        "status": "success",
+        "message": "Configurações do sistema salvas com sucesso!"
+    }
+
+
 @app.get("/api/v1/videos")
 def list_videos(request: Request, x_api_key: str | None = Header(None)):
     user = authenticate_request(request, x_api_key)

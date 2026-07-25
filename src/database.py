@@ -107,8 +107,23 @@ class VideoRepository:
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS posted_at TEXT")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_s3_url TEXT")
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS system_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at TEXT
+                    )
+                """)
             else:
                 with conn:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS system_settings (
+                            key TEXT PRIMARY KEY,
+                            value TEXT,
+                            updated_at TEXT
+                        )
+                    """)
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS users (
                             id TEXT PRIMARY KEY,
@@ -452,6 +467,80 @@ class VideoRepository:
                     f"UPDATE jobs SET caption = {self._ph(1)}, scheduled_at = {self._ph(1)}, share_to_feed = {self._ph(1)}, status = 'scheduled', updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
                     (caption, scheduled_at, share_to_feed, now, job_id)
                 )
+        finally:
+            conn.close()
+
+    def update_job_scheduled_time(self, job_id: str, scheduled_at: str) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    f"UPDATE jobs SET scheduled_at = {self._ph(1)}, status = 'scheduled', updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (scheduled_at, now, job_id)
+                )
+                return cursor.rowcount > 0 if hasattr(cursor, 'rowcount') else True
+        finally:
+            conn.close()
+
+    def cancel_job_schedule(self, job_id: str) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    f"UPDATE jobs SET scheduled_at = NULL, status = 'completed', updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (now, job_id)
+                )
+                return cursor.rowcount > 0 if hasattr(cursor, 'rowcount') else True
+        finally:
+            conn.close()
+
+    # --- SYSTEM SETTINGS OPERATIONS ---
+    def get_system_setting(self, key: str, default: str = "") -> str:
+        ph = self._ph(1)
+        conn = self._connect()
+        try:
+            cursor = conn.execute(f"SELECT value FROM system_settings WHERE key = {ph}", (key,))
+            row = cursor.fetchone()
+            if row:
+                return row[0] if not isinstance(row, dict) else row["value"]
+            return default
+        finally:
+            conn.close()
+
+    def set_system_setting(self, key: str, value: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                if self.is_postgres:
+                    conn.execute("""
+                        INSERT INTO system_settings (key, value, updated_at)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                    """, (key, value, now))
+                else:
+                    conn.execute("""
+                        INSERT INTO system_settings (key, value, updated_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                    """, (key, value, now))
+        finally:
+            conn.close()
+
+    def get_all_system_settings(self) -> dict[str, str]:
+        conn = self._connect()
+        try:
+            cursor = conn.execute("SELECT key, value FROM system_settings")
+            rows = cursor.fetchall()
+            result = {}
+            for r in rows:
+                if isinstance(r, dict):
+                    result[r["key"]] = r["value"]
+                else:
+                    result[r[0]] = r[1]
+            return result
         finally:
             conn.close()
 

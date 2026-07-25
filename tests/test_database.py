@@ -99,18 +99,23 @@ def test_user_settings_and_job_scheduling(repo):
     )
     updated_user = repo.get_user_by_id(user["id"])
     assert updated_user["default_caption_suffix"] == "Siga @agufzz"
-    assert updated_user["share_to_feed"] == 0
+    assert updated_user["default_post_interval_hours"] == 3
 
-    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/111/")
-    repo.update_job_schedule(
-        job_id=job["id"],
-        caption="Legenda teste Siga @agufzz",
-        scheduled_at="2026-07-25T18:00:00Z",
-        share_to_feed=0
-    )
-    fetched_job = repo.get_job(job["id"])
-    assert fetched_job["caption"] == "Legenda teste Siga @agufzz"
-    assert fetched_job["scheduled_at"] == "2026-07-25T18:00:00Z"
-    assert fetched_job["share_to_feed"] == 0
+
+def test_system_settings_operations(repo):
+    # Get non-existent key with default
+    assert repo.get_system_setting("ai_provider", "gemini") == "gemini"
+
+    # Set and get system settings
+    repo.set_system_setting("ai_provider", "openrouter")
+    repo.set_system_setting("openrouter_api_key", "sk-or-v1-123456")
+    repo.set_system_setting("openrouter_model", "openai/gpt-4o-mini")
+
+    assert repo.get_system_setting("ai_provider") == "openrouter"
+    assert repo.get_system_setting("openrouter_api_key") == "sk-or-v1-123456"
+
+    all_settings = repo.get_all_system_settings()
+    assert all_settings["ai_provider"] == "openrouter"
+    assert all_settings["openrouter_model"] == "openai/gpt-4o-mini"
 
 

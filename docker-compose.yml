@@ -31,10 +31,10 @@ services:
       dockerfile: Dockerfile
     container_name: reels-frontend
     ports:
-      - "${FRONTEND_PORT:-3008}:3008"
+      - "${FRONTEND_PORT:-3008}:3000"
     environment:
       - HOSTNAME=0.0.0.0
-      - PORT=3008
+      - PORT=3000
       - NEXT_PUBLIC_API_URL=http://localhost:${API_PORT:-8008}
       - INTERNAL_API_URL=http://reels-api:8000
     depends_on:

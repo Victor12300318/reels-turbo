@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  reels-api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - LOCAL_VIDEOS_DIR=/app/videos
+      - DATABASE_URL=${DATABASE_URL}
+      - S3_ACCESS_KEY=aFK6HG8Urf82JJ5pVkKo
+      - S3_SECRET_KEY=uip2cWiVVnMjaDK5KSFRuXs20BpQTjwJtw6eoBJz
+      - S3_BUCKET=reels-turbo
+      - S3_ENDPOINT=crm-minio.xjbony.easypanel.host
+      - S3_PORT=443
+      - S3_SSL=true
+      - S3_REGION=us-east-1
+      - S3_PUBLIC_CUSTOM_DOMAIN=https://crm-minio.xjbony.easypanel.host/reels-turbo
+    volumes:
+      - ./data:/app/data
+    command: ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  reels-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - INTERNAL_API_URL=http://reels-api:8000
+    depends_on:
+      - reels-api
+

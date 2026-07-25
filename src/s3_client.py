@@ -52,3 +52,23 @@ class S3Storage:
         except Exception as e:
             logger.error(f"Failed to upload to S3: {e}")
             raise
+
+    def upload_fileobj(self, fileobj, object_name: str, content_type: str = "video/mp4") -> str:
+        """
+        Uploads a file-like stream to S3/MinIO and returns the public access URL.
+        """
+        try:
+            logger.info(f"Uploading stream to S3 bucket '{self.bucket}' as '{object_name}'...")
+            self.client.upload_fileobj(
+                fileobj,
+                self.bucket,
+                object_name,
+                ExtraArgs={"ContentType": content_type}
+            )
+            public_domain = self.settings.s3_public_custom_domain.rstrip("/")
+            public_url = f"{public_domain}/{object_name}"
+            logger.info(f"Stream upload complete. Public URL: {public_url}")
+            return public_url
+        except Exception as e:
+            logger.error(f"Failed to upload stream to S3: {e}")
+            raise

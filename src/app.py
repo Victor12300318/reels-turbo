@@ -6,7 +6,7 @@ import secrets
 import shutil
 from pathlib import Path
 import httpx
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, UploadFile, File, Header
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, UploadFile, File, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, RedirectResponse
 from src.main import clone_reels_pipeline
@@ -708,6 +708,86 @@ def download_job_output(job_id: str, request: Request, x_api_key: str | None = H
 
 
 # --- VIDEO LIBRARY ENDPOINTS ---
+
+@app.post("/api/v1/videos/upload-stream")
+async def upload_video_stream(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    filename: str = Query("video.mp4"),
+    x_api_key: str | None = Header(None)
+):
+    user = authenticate_request(request, x_api_key)
+    repo = get_repo()
+
+    user_video_dir = Path(settings.data_dir) / "users" / user["id"] / "videos"
+    user_video_dir.mkdir(parents=True, exist_ok=True)
+
+    dest_path = user_video_dir / filename
+
+    # Stream raw request body directly to disk
+    try:
+        with open(dest_path, "wb") as buffer:
+            async for chunk in request.stream():
+                buffer.write(chunk)
+    except Exception as e:
+        logging.error(f"Error reading video stream for {filename}: {e}")
+        raise HTTPException(status_code=400, detail="Erro ao receber fluxo de vídeo.")
+
+    # Upload local file to S3
+    s3_public_url = ""
+    try:
+        from src.s3_client import S3Storage
+        s3 = S3Storage()
+        s3_key = f"library/{user['id']}/{filename}"
+        s3_public_url = s3.upload_file(str(dest_path), object_name=s3_key)
+    except Exception as s3_err:
+        logging.warning(f"Failed to upload library video '{filename}' to S3: {s3_err}")
+
+    # Calculate duration
+    duration = 0.0
+    try:
+        from src import ffmpeg_utils
+        duration = ffmpeg_utils.get_duration(str(dest_path))
+    except Exception:
+        pass
+
+    # Save to DB IMMEDIATELY with S3 URL and local path
+    repo.upsert({
+        "path": str(dest_path),
+        "filename": filename,
+        "description": "Pronto para uso (indexando com IA em segundo plano)",
+        "themes": "",
+        "orientation": "vertical",
+        "duration_seconds": duration,
+        "has_face": 0,
+        "frame_paths": [],
+    }, user_id=user["id"])
+
+    # Enqueue background indexer for Gemini AI analysis
+    def index_single():
+        try:
+            client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+            analyzer = VideoAnalyzer(client)
+            index_videos_folder(
+                str(user_video_dir),
+                analyzer,
+                repo,
+                frames_per_video=settings.frames_per_video,
+                frames_output_dir=str(Path(settings.data_dir) / "frames"),
+                user_id=user["id"]
+            )
+        except Exception as e:
+            logging.error(f"Erro ao indexar vídeo {filename} via Gemini: {e}")
+
+    background_tasks.add_task(index_single)
+
+    return {
+        "status": "uploaded",
+        "message": f"Vídeo '{filename}' enviado com sucesso para o S3 e biblioteca!",
+        "public_url": s3_public_url,
+        "filename": filename,
+    }
+
 
 @app.post("/api/v1/videos/upload")
 async def upload_video(

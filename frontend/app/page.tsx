@@ -400,31 +400,39 @@ export default function DashboardPage() {
     const files = e.target.files
     if (!files || files.length === 0) return
     setUploading(true)
-    setUploadMessage(`Enviando ${files.length} vídeo(s) para nuvem S3...`)
-    const formData = new FormData()
 
-    // Add up to 30 files
     const fileList = Array.from(files).slice(0, 30)
-    fileList.forEach((file) => {
-      formData.append('files', file)
-    })
+    setUploadMessage(`Enviando ${fileList.length} vídeo(s) para o S3...`)
 
-    try {
-      const res = await fetch(`${API_BASE}/videos/upload`, {
-        method: 'POST',
-        headers: { 'X-API-Key': apiKey },
-        body: formData
-      })
-      if (res.ok) {
-        setUploadMessage(`${fileList.length} vídeo(s) enviado(s) para o S3! Indexação IA iniciada.`)
-        await fetchVideos(apiKey)
+    let successCount = 0
+    for (const file of fileList) {
+      try {
+        setUploadMessage(`Enviando ${file.name} para o S3...`)
+        const res = await fetch(`${API_BASE}/videos/upload-stream?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': file.type || 'video/mp4'
+          },
+          body: file
+        })
+        if (res.ok) {
+          successCount++
+        }
+      } catch (err: any) {
+        console.error(`Erro ao enviar ${file.name}:`, err)
       }
-    } catch (err: any) {
-      setUploadMessage(`Erro: ${err.message}`)
-    } finally {
-      setUploading(false)
-      setTimeout(() => setUploadMessage(''), 4000)
     }
+
+    if (successCount > 0) {
+      setUploadMessage(`${successCount} vídeo(s) enviado(s) para o S3 com sucesso! Salvo(s) na biblioteca.`)
+      await fetchVideos(apiKey)
+    } else {
+      setUploadMessage('Falha ao enviar os vídeos para o S3. Tente novamente.')
+    }
+
+    setUploading(false)
+    setTimeout(() => setUploadMessage(''), 4000)
   }
 
   const toggleJobSelection = (id: string) => {

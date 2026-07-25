@@ -30,9 +30,7 @@ import {
   Shield,
   UserPlus,
   Lock,
-  Menu,
-  ChevronLeft,
-  ChevronRight
+  Menu
 } from 'lucide-react'
 
 import UserManagementTab from '../components/UserManagementTab'
@@ -297,7 +295,7 @@ export default function DashboardPage() {
 
   const notifyBrowser = (job: Job) => {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('🎬 Reels Clonado com Sucesso!', {
+      new Notification('Reels Clonado com Sucesso', {
         body: 'Seu vídeo foi renderizado e está pronto no seu painel.',
         icon: '/favicon.ico'
       })
@@ -374,7 +372,7 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        alert('🚀 Reels publicado no Instagram com sucesso!')
+        alert('Reels publicado no Instagram com sucesso!')
         await fetchJobs(apiKey)
       } else {
         alert(`Erro ao publicar: ${data.detail || 'Falha no envio'}`)
@@ -487,10 +485,10 @@ export default function DashboardPage() {
     }
 
     if (successCount > 0) {
-      setUploadMessage(`✅ ${successCount} de ${total} vídeo(s) enviado(s) para o S3 com sucesso!`)
+      setUploadMessage(`${successCount} de ${total} vídeo(s) enviado(s) para o S3 com sucesso!`)
       await fetchVideos(apiKey)
     } else {
-      setUploadMessage('❌ Falha ao enviar os vídeos para o S3. Tente novamente.')
+      setUploadMessage('Falha ao enviar os vídeos para o S3. Tente novamente.')
     }
 
     setUploading(false)
@@ -526,51 +524,51 @@ export default function DashboardPage() {
   }
 
   const navItems = [
-    { id: 'cloner', label: 'Clonador', icon: Zap, color: 'text-blue-400' },
-    { id: 'calendar', label: 'Agenda', icon: CalendarIcon, color: 'text-cyan-400' },
-    { id: 'editor', label: 'Ajustes', icon: Settings, color: 'text-blue-400' },
-    { id: 'library', label: 'Biblioteca', icon: Video, color: 'text-cyan-400' },
-    ...(isAdmin ? [{ id: 'users', label: 'Usuários', icon: Users, color: 'text-amber-400' }] : [])
+    { id: 'cloner', label: 'Clonador', icon: Zap },
+    { id: 'calendar', label: 'Agenda', icon: CalendarIcon },
+    { id: 'editor', label: 'Ajustes', icon: Settings },
+    { id: 'library', label: 'Biblioteca', icon: Video },
+    ...(isAdmin ? [{ id: 'users', label: 'Usuários', icon: Users }] : [])
   ] as const
 
   return (
-    <div className="min-h-screen bg-[#0b0e17] text-slate-100 font-sans antialiased flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased flex flex-col md:flex-row">
       
-      {/* DESKTOP SIDEBAR NAVIGATION (COLLAPSIBLE HAMBURGER) */}
+      {/* DESKTOP SIDEBAR NAVIGATION (MANYCHAT LIGHT SAAS STYLE) */}
       <aside
-        className={`hidden md:flex flex-col fixed top-0 left-0 bottom-0 z-40 bg-[#131927] border-r border-slate-800/80 transition-all duration-300 ${
+        className={`hidden md:flex flex-col fixed top-0 left-0 bottom-0 z-40 bg-white border-r border-slate-200 transition-all duration-300 shadow-sm ${
           sidebarCollapsed ? 'w-20' : 'w-64'
         }`}
       >
         {/* SIDEBAR HEADER WITH HAMBURGER TOGGLE */}
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-lg shadow-blue-600/10">
-                <Sparkles className="w-5 h-5 text-blue-400" />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                <Sparkles className="w-5 h-5 text-[#0066FF]" />
               </div>
               <div>
-                <h1 className="text-sm font-bold tracking-tight text-white leading-tight">Reels Cloner</h1>
-                <p className="text-[10px] text-blue-400 font-medium">ManyChat Edition</p>
+                <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Reels Cloner</h1>
+                <p className="text-[10px] text-blue-600 font-medium">ManyChat Edition</p>
               </div>
             </div>
           )}
           {sidebarCollapsed && (
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-lg shadow-blue-600/10">
-              <Sparkles className="w-5 h-5 text-blue-400" />
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center mx-auto">
+              <Sparkles className="w-5 h-5 text-[#0066FF]" />
             </div>
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800/60 transition-all"
-            title={sidebarCollapsed ? 'Expandir Menu' : 'Recolher Menu (Modo Ícones)'}
+            className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-all"
+            title={sidebarCollapsed ? 'Expandir Menu' : 'Recolher Menu'}
           >
             <Menu className="w-5 h-5" />
           </button>
         </div>
 
         {/* NAVIGATION ITEMS */}
-        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
@@ -580,13 +578,13 @@ export default function DashboardPage() {
                 key={item.id}
                 onClick={() => changeTab(item.id as any)}
                 title={sidebarCollapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl font-semibold text-xs transition-all duration-200 ${
+                className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all duration-200 ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-[#0066FF] text-white shadow-sm shadow-blue-600/20'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : item.color}`} />
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
                 {!sidebarCollapsed && <span>{item.label}</span>}
               </button>
             )
@@ -594,18 +592,18 @@ export default function DashboardPage() {
         </nav>
 
         {/* SIDEBAR FOOTER (USER & LOGOUT) */}
-        <div className="p-4 border-t border-slate-800/80">
+        <div className="p-4 border-t border-slate-100">
           {!sidebarCollapsed ? (
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-white truncate">{userEmail || 'Usuário'}</p>
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Ativo
+                <p className="text-xs font-semibold text-slate-900 truncate">{userEmail || 'Usuário'}</p>
+                <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Ativo
                 </p>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-slate-800/60 transition-all"
+                className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 transition-all"
                 title="Sair da Conta"
               >
                 <LogOut className="w-4 h-4" />
@@ -614,7 +612,7 @@ export default function DashboardPage() {
           ) : (
             <button
               onClick={handleLogout}
-              className="w-full flex justify-center p-2.5 text-slate-400 hover:text-rose-400 rounded-xl hover:bg-slate-800/60 transition-all"
+              className="w-full flex justify-center p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 transition-all"
               title="Sair da Conta"
             >
               <LogOut className="w-5 h-5" />
@@ -624,22 +622,22 @@ export default function DashboardPage() {
       </aside>
 
       {/* MOBILE TOP HEADER */}
-      <header className="md:hidden sticky top-0 z-30 bg-[#131927]/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+      <header className="md:hidden sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 text-[#0066FF] flex items-center justify-center">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-white leading-tight">Reels Cloner AI</h1>
-            <p className="text-[10px] text-blue-400 truncate max-w-[160px]">{userEmail}</p>
+            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Reels Cloner</h1>
+            <p className="text-[10px] text-slate-500 truncate max-w-[160px]">{userEmail}</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-white rounded-lg">
+        <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-slate-900 rounded-lg">
           <LogOut className="w-4 h-4" />
         </button>
       </header>
 
-      {/* MAIN CONTAINER (RESPONSIVE GRID & PADDING) */}
+      {/* MAIN CONTAINER (RESPONSIVE GRID & 3D ELEVATION CARDS) */}
       <main
         className={`flex-1 transition-all duration-300 ${
           sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
@@ -648,50 +646,49 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
 
           {/* DASHBOARD TOP HEADER BAR & METRICS */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800/80">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div>
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                {activeTab === 'cloner' && <>⚡ Clonador de Reels</>}
-                {activeTab === 'calendar' && <>📅 Agenda de Publicações</>}
-                {activeTab === 'editor' && <>⚙️ Configurações & Integração</>}
-                {activeTab === 'library' && <>📁 Biblioteca de Vídeos Locais</>}
-                {activeTab === 'users' && <>👥 Gestão de Usuários</>}
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                {activeTab === 'cloner' && <>Clonador de Reels</>}
+                {activeTab === 'calendar' && <>Agenda de Publicações</>}
+                {activeTab === 'editor' && <>Configurações & Integração</>}
+                {activeTab === 'library' && <>Biblioteca de Vídeos Locais</>}
+                {activeTab === 'users' && <>Gestão de Usuários</>}
               </h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">
-                Automação inteligente no estilo ManyChat para alavancar seu engajamento no Instagram.
+              <p className="text-xs md:text-sm text-slate-500 mt-1">
+                Automação de conteúdo visual para o Instagram no padrão ManyChat.
               </p>
             </div>
 
             {/* METRICS SUMMARY BADGES */}
             <div className="grid grid-cols-4 gap-2.5 md:flex md:items-center">
-              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-center md:text-left">
-                <p className="text-base md:text-lg font-extrabold text-blue-400 leading-tight">{metrics.total_cloned}</p>
-                <p className="text-[9px] text-slate-400 uppercase font-semibold">Clonados</p>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center md:text-left shadow-sm">
+                <p className="text-base md:text-lg font-extrabold text-[#0066FF] leading-tight">{metrics.total_cloned}</p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold">Clonados</p>
               </div>
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-center md:text-left">
-                <p className="text-base md:text-lg font-extrabold text-emerald-400 leading-tight">{metrics.total_published}</p>
-                <p className="text-[9px] text-slate-400 uppercase font-semibold">Postados</p>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center md:text-left shadow-sm">
+                <p className="text-base md:text-lg font-extrabold text-emerald-600 leading-tight">{metrics.total_published}</p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold">Postados</p>
               </div>
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-center md:text-left">
-                <p className="text-base md:text-lg font-extrabold text-amber-400 leading-tight">{metrics.scheduled_count}</p>
-                <p className="text-[9px] text-slate-400 uppercase font-semibold">Agendados</p>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center md:text-left shadow-sm">
+                <p className="text-base md:text-lg font-extrabold text-amber-600 leading-tight">{metrics.scheduled_count}</p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold">Agendados</p>
               </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-center md:text-left">
-                <p className="text-base md:text-lg font-extrabold text-cyan-400 leading-tight">{metrics.library_count}</p>
-                <p className="text-[9px] text-slate-400 uppercase font-semibold">Biblioteca</p>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center md:text-left shadow-sm">
+                <p className="text-base md:text-lg font-extrabold text-slate-700 leading-tight">{metrics.library_count}</p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold">Biblioteca</p>
               </div>
             </div>
           </div>
 
-          {/* TAB 1: ⚡ CLONADOR (HOME FEED) */}
+          {/* TAB 1: CLONADOR (HOME FEED) */}
           {activeTab === 'cloner' && (
             <div className="space-y-6">
               
               {/* MANUAL URL INPUT */}
-              <form onSubmit={handleCreateClone} className="space-y-3 rounded-2xl border border-blue-500/20 bg-[#131927] p-5 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-500"></div>
-                <label className="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                  <Zap className="w-4 h-4 text-blue-400" /> Clonar Link do Instagram Reels
+              <form onSubmit={handleCreateClone} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-all">
+                <label className="text-xs font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wide">
+                  <Zap className="w-4 h-4 text-[#0066FF]" /> Clonar Link do Instagram Reels
                 </label>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
@@ -700,33 +697,33 @@ export default function DashboardPage() {
                     value={inputUrl}
                     onChange={(e) => setInputUrl(e.target.value)}
                     placeholder="https://www.instagram.com/reel/..."
-                    className="flex-1 rounded-xl border border-slate-800 bg-[#0b0e17] px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-all"
+                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs md:text-sm text-slate-900 placeholder-slate-400 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
                   />
                   <button
                     type="submit"
                     disabled={cloningNow}
-                    className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-6 py-3 text-xs md:text-sm font-bold shrink-0 shadow-lg shadow-blue-600/25 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    className="rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white px-6 py-2.5 text-xs md:text-sm font-bold shrink-0 shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-4 h-4" />
-                    {cloningNow ? 'Processando IA...' : 'Clonar Reels'}
+                    {cloningNow ? 'Processando...' : 'Clonar Reels'}
                   </button>
                 </div>
               </form>
 
-              {/* JOBS FEED - RESPONSIVE GRID (1, 2, 3 COLUMNS) */}
+              {/* JOBS FEED - RESPONSIVE GRID (1, 2, 3 COLUMNS WITH 3D HOVER ELEVATION) */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Seus Reels Processados</h3>
-                  <button onClick={() => fetchJobs(apiKey)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-semibold transition-all">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Seus Reels Processados</h3>
+                  <button onClick={() => fetchJobs(apiKey)} className="text-xs text-[#0066FF] hover:text-blue-700 flex items-center gap-1 font-semibold transition-all">
                     <RefreshCw className="w-3.5 h-3.5" /> Atualizar
                   </button>
                 </div>
 
                 {jobs.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center space-y-3 bg-[#131927]/40">
-                    <Sparkles className="w-10 h-10 text-slate-600 mx-auto" />
-                    <p className="text-sm font-medium text-slate-300">Nenhum Reels clonado ainda.</p>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto">Cole um link no campo acima para gerar um novo Reels usando os vídeos da sua biblioteca local!</p>
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-12 text-center space-y-3 bg-white">
+                    <Sparkles className="w-10 h-10 text-slate-300 mx-auto" />
+                    <p className="text-sm font-semibold text-slate-700">Nenhum Reels clonado ainda.</p>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">Cole um link no campo acima para gerar um novo Reels a partir da sua biblioteca local.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -736,30 +733,30 @@ export default function DashboardPage() {
                       const isReadyOrScheduled = (job.status === 'completed' || job.status === 'scheduled') && Boolean(job.output_path)
 
                       return (
-                        <div key={job.id} className="rounded-2xl border border-slate-800 bg-[#131927] p-4 space-y-3.5 shadow-xl flex flex-col justify-between hover:border-slate-700/80 transition-all">
+                        <div key={job.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3.5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
                           {/* CARD STATUS BADGE */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-mono text-blue-300 truncate max-w-[200px]" title={job.url}>
+                              <span className="text-[11px] font-mono text-slate-600 truncate max-w-[180px]" title={job.url}>
                                 {job.url}
                               </span>
                               {job.status === 'completed' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
                                   <CheckCircle2 className="w-3 h-3" /> Pronto
                                 </span>
                               )}
                               {job.status === 'scheduled' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1 shrink-0" title={job.scheduled_at}>
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shrink-0" title={job.scheduled_at}>
                                   <Clock className="w-3 h-3" /> Agendado ({formatScheduledTime(job.scheduled_at)})
                                 </span>
                               )}
                               {job.status === 'processing' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse flex items-center gap-1 shrink-0">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066FF] border border-blue-200 animate-pulse flex items-center gap-1 shrink-0">
                                   <RefreshCw className="w-3 h-3 animate-spin" /> {job.progress || 10}%
                                 </span>
                               )}
                               {job.status === 'failed' && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 shrink-0">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shrink-0">
                                   <AlertCircle className="w-3 h-3" /> Falhou
                                 </span>
                               )}
@@ -767,23 +764,23 @@ export default function DashboardPage() {
 
                             {/* PROCESSING PROGRESS BAR */}
                             {job.status === 'processing' && (
-                              <div className="space-y-1.5 p-3 rounded-xl bg-[#0b0e17] border border-blue-500/20">
-                                <div className="flex justify-between text-[10px] text-blue-300 font-medium">
+                              <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                <div className="flex justify-between text-[10px] text-slate-600 font-medium">
                                   <span>Renderizando com IA...</span>
                                   <span>{job.progress || 10}%</span>
                                 </div>
-                                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                                   <div
-                                    className="bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-500"
+                                    className="bg-[#0066FF] h-full rounded-full transition-all duration-500"
                                     style={{ width: `${Math.max(job.progress || 10, 8)}%` }}
                                   />
                                 </div>
                               </div>
                             )}
 
-                            {/* 9:16 VERTICAL VIDEO PLAYER (FOR COMPLETED & SCHEDULED JOBS) */}
+                            {/* 9:16 VERTICAL VIDEO PLAYER */}
                             {isReadyOrScheduled && (
-                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[380px] w-full mx-auto border border-slate-800 flex items-center justify-center group">
+                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[380px] w-full mx-auto border border-slate-200 shadow-inner flex items-center justify-center">
                                 {job.output_path.startsWith('http') ? (
                                   <video
                                     src={videoSrc}
@@ -792,17 +789,17 @@ export default function DashboardPage() {
                                   />
                                 ) : (
                                   <div className="p-4 text-center space-y-2">
-                                    <Play className="w-8 h-8 text-blue-400 mx-auto" />
-                                    <p className="text-xs text-slate-300">Vídeo gerado e disponível para download.</p>
+                                    <Play className="w-8 h-8 text-white/80 mx-auto" />
+                                    <p className="text-xs text-slate-300">Vídeo gerado e pronto.</p>
                                   </div>
                                 )}
 
                                 {/* IA vs ORIGINAL COMPARISON TOGGLE */}
-                                <div className="absolute top-2.5 right-2.5 bg-[#131927]/90 backdrop-blur-md rounded-lg p-1 border border-slate-700/80 flex text-[10px] shadow-lg">
+                                <div className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-md rounded-lg p-1 border border-slate-200 flex text-[10px] shadow-md">
                                   <button
                                     onClick={() => setPlayerMode(p => ({ ...p, [job.id]: 'ia' }))}
                                     className={`px-2 py-1 rounded-md font-bold transition-all ${
-                                      currentMode === 'ia' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                      currentMode === 'ia' ? 'bg-[#0066FF] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
                                     }`}
                                   >
                                     IA Clone
@@ -810,7 +807,7 @@ export default function DashboardPage() {
                                   <button
                                     onClick={() => setPlayerMode(p => ({ ...p, [job.id]: 'original' }))}
                                     className={`px-2 py-1 rounded-md font-bold transition-all ${
-                                      currentMode === 'original' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                      currentMode === 'original' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
                                     }`}
                                   >
                                     Original
@@ -820,12 +817,12 @@ export default function DashboardPage() {
                             )}
                           </div>
 
-                          {/* ACTION BUTTONS (FOR COMPLETED & SCHEDULED JOBS) */}
+                          {/* ACTION BUTTONS (COMPLETED & SCHEDULED) */}
                           {isReadyOrScheduled && (
-                            <div className="flex gap-2 pt-2 border-t border-slate-800/80">
+                            <div className="flex gap-2 pt-2 border-t border-slate-100">
                               <button
                                 onClick={() => handlePublishNow(job.id)}
-                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white py-2.5 text-xs font-bold shadow-lg shadow-blue-600/20 transition-all"
+                                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
                               >
                                 <Send className="w-3.5 h-3.5" /> Postar Agora
                               </button>
@@ -835,10 +832,10 @@ export default function DashboardPage() {
                                   download
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2.5 text-xs font-medium border border-slate-700 transition-all"
+                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 text-xs font-semibold border border-slate-200 transition-all"
                                   title="Baixar MP4"
                                 >
-                                  <Download className="w-4 h-4 text-cyan-400" />
+                                  <Download className="w-4 h-4 text-slate-700" />
                                 </a>
                               )}
                             </div>
@@ -852,31 +849,30 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 2: 📅 CALENDÁRIO & AGENDAMENTO EM LOTE */}
+          {/* TAB 2: CALENDÁRIO & AGENDAMENTO EM LOTE */}
           {activeTab === 'calendar' && (
             <div className="space-y-8">
               
               {/* BATCH SCHEDULER TOOL */}
-              <div className="rounded-2xl border border-blue-500/20 bg-[#131927] p-6 space-y-5 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-blue-500 to-cyan-400"></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-400" /> Agendamento em Lote de Reels
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600" /> Agendamento em Lote de Reels
                   </h3>
-                  <span className="text-xs text-blue-400 font-medium">Distribuir postagens na fila</span>
+                  <span className="text-xs text-[#0066FF] font-semibold">Distribuir postagens na fila</span>
                 </div>
                 
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Selecione múltiplos vídeos prontos para enfileirar no Instagram com o intervalo automático de sua preferência.
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Selecione múltiplos vídeos prontos para enfileirar no Instagram com o intervalo automático configurado.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-300">Intervalo entre publicações</label>
+                    <label className="text-xs font-semibold text-slate-700">Intervalo entre publicações</label>
                     <select
                       value={batchInterval}
                       onChange={(e) => setBatchInterval(Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-800 bg-[#0b0e17] px-3.5 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none transition-all"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
                     >
                       <option value={1}>A cada 1 hora</option>
                       <option value={2}>A cada 2 horas</option>
@@ -889,10 +885,10 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-300">Vídeos prontos ({selectedJobIds.length} selecionados)</label>
+                    <label className="text-xs font-semibold text-slate-700">Vídeos prontos ({selectedJobIds.length} selecionados)</label>
                     <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
                       {jobs.filter(j => j.status === 'completed').length === 0 ? (
-                        <p className="text-[11px] text-slate-500 text-center py-4 bg-[#0b0e17] rounded-xl border border-slate-800">
+                        <p className="text-[11px] text-slate-500 text-center py-4 bg-slate-50 rounded-xl border border-slate-200">
                           Nenhum Reels pronto disponível para agendamento.
                         </p>
                       ) : (
@@ -902,12 +898,12 @@ export default function DashboardPage() {
                             onClick={() => toggleJobSelection(j.id)}
                             className={`p-3 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
                               selectedJobIds.includes(j.id)
-                                ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
-                                : 'border-slate-800 bg-[#0b0e17] text-slate-400 hover:border-slate-700'
+                                ? 'border-amber-300 bg-amber-50 text-amber-900'
+                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
                             }`}
                           >
                             <span className="truncate max-w-[280px] font-mono text-[11px]">{j.url}</span>
-                            <input type="checkbox" checked={selectedJobIds.includes(j.id)} readOnly className="rounded accent-amber-500 w-4 h-4" />
+                            <input type="checkbox" checked={selectedJobIds.includes(j.id)} readOnly className="rounded accent-amber-600 w-4 h-4" />
                           </div>
                         ))
                       )}
@@ -916,24 +912,24 @@ export default function DashboardPage() {
                 </div>
 
                 {batchMessage && (
-                  <p className="text-xs text-amber-400 bg-amber-950/40 p-3 rounded-xl border border-amber-500/20">{batchMessage}</p>
+                  <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200">{batchMessage}</p>
                 )}
 
                 <button
                   onClick={handleBatchSchedule}
                   disabled={batchScheduling || selectedJobIds.length === 0}
-                  className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white py-3 text-xs font-bold shadow-lg shadow-amber-600/20 disabled:opacity-50 transition-all"
+                  className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 text-white py-3 text-xs font-bold shadow-sm shadow-amber-600/20 disabled:opacity-50 transition-all"
                 >
-                  {batchScheduling ? 'Agendando vídeos...' : `Agendar ${selectedJobIds.length} Vídeo(s) na Fila`}
+                  {batchScheduling ? 'Agendando...' : `Agendar ${selectedJobIds.length} Vídeo(s) na Fila`}
                 </button>
               </div>
 
               {/* VISUAL SCHEDULED CALENDAR FEED */}
               <div className="space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Próximas Publicações Agendadas</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Próximas Publicações Agendadas</h3>
                 {jobs.filter(j => j.status === 'scheduled').length === 0 ? (
-                  <div className="p-8 text-center border border-slate-800 rounded-2xl text-xs text-slate-500 bg-[#131927]/40">
-                    Nenhum post agendado no momento. Use a ferramenta acima para agendar vídeos em lote!
+                  <div className="p-8 text-center border border-slate-200 rounded-2xl text-xs text-slate-500 bg-white">
+                    Nenhum post agendado no momento.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -942,23 +938,23 @@ export default function DashboardPage() {
                       const videoSrc = currentMode === 'ia' ? j.output_path : (j.original_s3_url || j.url)
 
                       return (
-                        <div key={j.id} className="rounded-2xl border border-slate-800 bg-[#131927] p-4 space-y-3 shadow-xl flex flex-col justify-between">
+                        <div key={j.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                                 <Clock className="w-3 h-3" /> Agendado ({formatScheduledTime(j.scheduled_at)})
                               </span>
                             </div>
-                            <p className="text-xs font-mono text-slate-300 truncate" title={j.url}>{j.url}</p>
+                            <p className="text-xs font-mono text-slate-600 truncate" title={j.url}>{j.url}</p>
 
                             {/* PLAYER 9:16 IN CALENDAR TAB */}
                             {j.output_path && (
-                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[340px] w-full mx-auto border border-slate-800 flex items-center justify-center">
+                              <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[340px] w-full mx-auto border border-slate-200 flex items-center justify-center">
                                 {j.output_path.startsWith('http') ? (
                                   <video src={videoSrc} controls className="w-full h-full object-cover" />
                                 ) : (
                                   <div className="p-4 text-center space-y-2">
-                                    <Play className="w-8 h-8 text-amber-400 mx-auto" />
+                                    <Play className="w-8 h-8 text-amber-500 mx-auto" />
                                     <p className="text-xs text-slate-300">Vídeo agendado pronto para prévia.</p>
                                   </div>
                                 )}
@@ -967,10 +963,10 @@ export default function DashboardPage() {
                           </div>
 
                           {/* ACTION BUTTONS FOR SCHEDULED POSTS */}
-                          <div className="flex gap-2 pt-2 border-t border-slate-800">
+                          <div className="flex gap-2 pt-2 border-t border-slate-100">
                             <button
                               onClick={() => handlePublishNow(j.id)}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white py-2 text-xs font-bold shadow-lg shadow-blue-600/20 transition-all"
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
                             >
                               <Send className="w-3.5 h-3.5" /> Postar Agora
                             </button>
@@ -980,10 +976,10 @@ export default function DashboardPage() {
                                 download
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 text-xs font-medium border border-slate-700"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 text-xs font-semibold border border-slate-200 transition-all"
                                 title="Baixar Vídeo"
                               >
-                                <Download className="w-4 h-4 text-cyan-400" />
+                                <Download className="w-4 h-4 text-slate-700" />
                               </a>
                             )}
                           </div>
@@ -997,34 +993,34 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 3: ⚙️ EDITOR & CONFIGURAÇÕES */}
+          {/* TAB 3: CONFIGURAÇÕES & AJUSTES */}
           {activeTab === 'editor' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* LEGENDA FIXA & REELS OPTIONS */}
-              <form onSubmit={handleSaveSettings} className="rounded-2xl border border-slate-800 bg-[#131927] p-6 space-y-5 shadow-xl">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-                  <Settings className="w-4 h-4 text-blue-400" /> Configurações de Postagem Automática
+              <form onSubmit={handleSaveSettings} className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <Settings className="w-4 h-4 text-[#0066FF]" /> Configurações de Postagem Automática
                 </h3>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-300">Legenda Fixa Padrão (Assinatura)</label>
+                  <label className="text-xs font-semibold text-slate-700">Legenda Fixa Padrão (Assinatura)</label>
                   <textarea
                     rows={3}
                     value={defaultCaptionSuffix}
                     onChange={(e) => setDefaultCaptionSuffix(e.target.value)}
                     placeholder="Ex: Siga @seu_perfil para mais conteúdos como esse! #reels #viral"
-                    className="w-full rounded-xl border border-slate-800 bg-[#0b0e17] p-3 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-all"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 placeholder-slate-400 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
                   />
                   <p className="text-[10px] text-slate-500">Esta assinatura será anexada no final da legenda do Reels clonado.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-300">Intervalo de Agendamento Padrão</label>
+                  <label className="text-xs font-semibold text-slate-700">Intervalo de Agendamento Padrão</label>
                   <select
                     value={intervalHours}
                     onChange={(e) => setIntervalHours(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-800 bg-[#0b0e17] px-3.5 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none transition-all"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
                   >
                     <option value={0}>Postagem Imediata (Assim que o Reels ficar pronto)</option>
                     <option value={1}>A cada 1 hora</option>
@@ -1037,27 +1033,27 @@ export default function DashboardPage() {
                   </select>
                 </div>
 
-                <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-800 bg-[#0b0e17]">
+                <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50">
                   <div>
-                    <p className="text-xs font-semibold text-white">Postar Apenas na Aba Reels</p>
-                    <p className="text-[10px] text-slate-400">Não compartilha o vídeo na grade do Feed principal</p>
+                    <p className="text-xs font-semibold text-slate-900">Postar Apenas na Aba Reels</p>
+                    <p className="text-[10px] text-slate-500">Não compartilha o vídeo na grade do Feed principal</p>
                   </div>
                   <input
                     type="checkbox"
                     checked={!shareToFeed}
                     onChange={(e) => setShareToFeed(!e.target.checked)}
-                    className="w-4 h-4 rounded accent-blue-600"
+                    className="w-4 h-4 rounded accent-[#0066FF]"
                   />
                 </div>
 
                 {/* META INSTAGRAM CONNECT */}
-                <div className="space-y-3 pt-3 border-t border-slate-800">
-                  <label className="text-xs font-semibold text-slate-300">Conexão Meta / Instagram Graph API</label>
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <label className="text-xs font-semibold text-slate-700">Conexão Meta / Instagram Graph API</label>
                   <a
                     href="/api/v1/auth/instagram/login"
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white py-3 text-xs font-bold shadow-lg shadow-pink-600/20 transition-all"
+                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-sm transition-all"
                   >
-                    <Sparkles className="w-4 h-4" /> Logar Direto com o Instagram Meta
+                    <Sparkles className="w-4 h-4 text-[#0066FF]" /> Logar Direto com o Instagram Meta
                   </a>
 
                   <div className="space-y-2 pt-2">
@@ -1066,26 +1062,26 @@ export default function DashboardPage() {
                       value={igAccountId}
                       onChange={(e) => setIgAccountId(e.target.value)}
                       placeholder="Instagram Account ID"
-                      className="w-full rounded-xl border border-slate-800 bg-[#0b0e17] px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
                     />
                     <input
                       type="password"
                       value={igAccessToken}
                       onChange={(e) => setIgAccessToken(e.target.value)}
                       placeholder="Access Token (Meta Token)"
-                      className="w-full rounded-xl border border-slate-800 bg-[#0b0e17] px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
                     />
                   </div>
                 </div>
 
                 {settingsMessage && (
-                  <p className="text-xs text-blue-400 bg-blue-950/40 p-3 rounded-xl border border-blue-500/20">{settingsMessage}</p>
+                  <p className="text-xs text-blue-800 bg-blue-50 p-3 rounded-xl border border-blue-200">{settingsMessage}</p>
                 )}
 
                 <button
                   type="submit"
                   disabled={settingsSaving}
-                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 text-white py-3 text-xs font-bold shadow-lg shadow-blue-600/20 transition-all"
+                  className="w-full rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-3 text-xs font-bold shadow-sm shadow-blue-600/20 transition-all"
                 >
                   {settingsSaving ? 'Salvando...' : 'Salvar Preferências'}
                 </button>
@@ -1094,45 +1090,45 @@ export default function DashboardPage() {
               {/* SECOND COLUMN: COOKIES & SHORTCUT */}
               <div className="space-y-6">
                 {/* INSTAGRAM COOKIES CARD */}
-                <div className="rounded-2xl border border-slate-800 bg-[#131927] p-6 space-y-4 shadow-xl">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                        <FileVideo className="w-4 h-4 text-amber-400" /> Cookies do Instagram (yt-dlp)
+                      <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <FileVideo className="w-4 h-4 text-amber-600" /> Cookies do Instagram (yt-dlp)
                       </h3>
-                      <p className="text-[11px] text-slate-400 mt-1">Envie o arquivo <code className="text-amber-300 font-mono">cookies.txt</code> para baixar Reels protegidos.</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Envie o arquivo <code className="text-amber-800 font-mono font-bold">cookies.txt</code> para baixar Reels protegidos.</p>
                     </div>
                     {cookieStatus === 'active' ? (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         Ativo
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                         Ausente
                       </span>
                     )}
                   </div>
 
                   {cookieMessage && (
-                    <p className="text-xs text-amber-400 bg-amber-950/40 p-3 rounded-xl border border-amber-500/20">{cookieMessage}</p>
+                    <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200">{cookieMessage}</p>
                   )}
 
-                  <label className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 text-xs font-bold border border-slate-700 cursor-pointer transition-all">
-                    <Upload className="w-4 h-4 text-amber-400" />
+                  <label className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 text-xs font-bold border border-slate-200 cursor-pointer transition-all">
+                    <Upload className="w-4 h-4 text-slate-700" />
                     <span>{cookieUploading ? 'Enviando...' : 'Carregar cookies.txt'}</span>
                     <input type="file" accept=".txt" onChange={handleCookiesUpload} disabled={cookieUploading} className="hidden" />
                   </label>
                 </div>
 
                 {/* IOS SHORTCUT CONNECT CARD */}
-                <div className="rounded-2xl border border-slate-800 bg-[#131927] p-6 space-y-4 shadow-xl">
-                  <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex items-center gap-2 text-[#0066FF] font-bold text-xs">
                     <Smartphone className="w-4 h-4" /> Atalho do iPhone (iOS Shortcut)
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">Chave de API única para configurar a automação direta no menu de compartilhamento do iOS:</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">Chave de API única para configurar a automação direta no menu de compartilhamento do iOS:</p>
                   <div className="flex items-center gap-2">
-                    <input type="text" readOnly value={apiKey} className="flex-1 rounded-xl border border-slate-800 bg-[#0b0e17] px-3.5 py-2.5 text-xs font-mono text-blue-300 focus:outline-none" />
-                    <button onClick={handleCopyKey} className="rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 px-4 py-2.5 text-xs font-bold border border-blue-500/30 transition-all">
+                    <input type="text" readOnly value={apiKey} className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-mono text-slate-800 focus:outline-none" />
+                    <button onClick={handleCopyKey} className="rounded-xl bg-blue-50 hover:bg-blue-100 text-[#0066FF] px-4 py-2.5 text-xs font-bold border border-blue-200 transition-all">
                       {copied ? 'Copiado!' : 'Copiar'}
                     </button>
                   </div>
@@ -1142,49 +1138,49 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 4: 📁 BIBLIOTECA DE VÍDEOS */}
+          {/* TAB 4: BIBLIOTECA DE VÍDEOS */}
           {activeTab === 'library' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-800 bg-[#131927] p-6 space-y-5 shadow-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                   <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Video className="w-4 h-4 text-blue-400" /> Sua Biblioteca de Vídeos
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Video className="w-4 h-4 text-[#0066FF]" /> Sua Biblioteca de Vídeos
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Vídeos locais que o motor de IA selecionará para mesclar e criar seus Reels.</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Vídeos locais que o motor de IA selecionará para mesclar e criar seus Reels.</p>
                   </div>
                   
-                  <label className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-4 py-2.5 text-xs font-bold cursor-pointer shadow-lg shadow-blue-600/20 shrink-0 inline-flex items-center gap-1.5 transition-all">
+                  <label className="rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white px-4 py-2.5 text-xs font-bold cursor-pointer shadow-sm shadow-blue-600/20 shrink-0 inline-flex items-center gap-1.5 transition-all">
                     <Upload className="w-4 h-4" /> Upload em Lote (Até 30 vídeos)
                     <input type="file" multiple accept=".mp4,.mov" onChange={handleFileUpload} disabled={uploading} className="hidden" />
                   </label>
                 </div>
 
                 {uploadMessage && (
-                  <p className="text-xs text-blue-400 bg-blue-950/40 p-3 rounded-xl border border-blue-500/20">{uploadMessage}</p>
+                  <p className="text-xs text-blue-800 bg-blue-50 p-3 rounded-xl border border-blue-200">{uploadMessage}</p>
                 )}
 
                 {videos.length === 0 ? (
-                  <div className="border border-dashed border-slate-800 rounded-2xl p-12 text-center space-y-2 bg-[#0b0e17]">
-                    <FileVideo className="w-10 h-10 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400">Sua biblioteca está vazia. Faça o upload de vídeos MP4/MOV acima!</p>
+                  <div className="border border-dashed border-slate-200 rounded-2xl p-12 text-center space-y-2 bg-slate-50">
+                    <FileVideo className="w-10 h-10 text-slate-300 mx-auto" />
+                    <p className="text-xs text-slate-500">Sua biblioteca está vazia. Faça o upload de vídeos MP4/MOV acima!</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {videos.map((vid) => (
-                      <div key={vid.id || vid.path} className="rounded-xl border border-slate-800 bg-[#0b0e17] p-3.5 flex items-center justify-between gap-3 hover:border-slate-700 transition-all">
+                      <div key={vid.id || vid.path} className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex items-center justify-between gap-3 hover:bg-white hover:border-slate-300 transition-all">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0066FF] shrink-0">
                             <Video className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-200 truncate">{vid.filename}</p>
+                            <p className="text-xs font-bold text-slate-800 truncate">{vid.filename}</p>
                             <p className="text-[10px] text-slate-500 truncate">{vid.description || 'Indexado pela IA'}</p>
                           </div>
                         </div>
                         <button
                           onClick={() => handleDeleteVideo(vid.id)}
-                          className="p-2 text-slate-500 hover:text-rose-400 rounded-xl hover:bg-slate-800/60 transition-all shrink-0"
+                          className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 transition-all shrink-0"
                           title="Remover Vídeo"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1197,7 +1193,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 5: 👥 GESTÃO DE USUÁRIOS (ADMIN) */}
+          {/* TAB 5: GESTÃO DE USUÁRIOS (ADMIN) */}
           {activeTab === 'users' && isAdmin && (
             <UserManagementTab apiKey={apiKey} />
           )}
@@ -1205,8 +1201,8 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR (FIXED) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#131927]/95 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2">
+      {/* MOBILE BOTTOM NAVIGATION BAR (FIXED LIGHT STYLE) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-4 py-2 shadow-lg">
         <div className="max-w-md mx-auto flex items-center justify-between text-center">
           {navItems.map((item) => {
             const Icon = item.icon
@@ -1217,7 +1213,7 @@ export default function DashboardPage() {
                 key={item.id}
                 onClick={() => changeTab(item.id as any)}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  isActive ? 'text-blue-400 font-bold scale-105' : 'text-slate-500 hover:text-slate-300'
+                  isActive ? 'text-[#0066FF] font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <Icon className="w-5 h-5" />

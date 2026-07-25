@@ -159,37 +159,37 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-slate-400 text-xs">Carregando usuários...</div>
+    return <div className="p-8 text-center text-slate-500 text-xs">Carregando usuários...</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Users className="w-4 h-4 text-amber-400" /> Gestão de Usuários (Multi-tenant)
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#0066FF]" /> Gestão de Usuários (Multi-tenant)
             </h2>
-            <p className="text-xs text-slate-400">Adicione, bloqueie ou redefina credenciais de acesso.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Adicione, bloqueie ou redefina credenciais de acesso.</p>
           </div>
         </div>
 
         {message && (
-          <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-500/20">
-            <CheckCircle2 className="w-4 h-4 shrink-0" /> {message}
+          <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> {message}
           </div>
         )}
 
         {error && (
-          <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-950/40 p-2.5 rounded-xl border border-rose-500/20">
-            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+          <div className="flex items-center gap-2 text-xs text-rose-800 bg-rose-50 p-3 rounded-xl border border-rose-200">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" /> {error}
           </div>
         )}
 
         {/* Create User Form */}
-        <form onSubmit={handleCreateUser} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
-          <h3 className="text-xs font-semibold text-slate-200 flex items-center gap-2">
-            <UserPlus className="w-3.5 h-3.5 text-indigo-400" /> Novo Usuário
+        <form onSubmit={handleCreateUser} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+            <UserPlus className="w-3.5 h-3.5 text-[#0066FF]" /> Novo Usuário
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input
@@ -198,7 +198,7 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               required
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0066FF]"
             />
             <input
               type="password"
@@ -206,22 +206,22 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0066FF]"
             />
-            <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
-              <span className="text-xs text-slate-300">Administrador</span>
+            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2">
+              <span className="text-xs font-semibold text-slate-700">Administrador</span>
               <input
                 type="checkbox"
                 checked={newIsAdmin}
                 onChange={(e) => setNewIsAdmin(e.target.checked)}
-                className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                className="w-4 h-4 rounded text-[#0066FF] focus:ring-0 cursor-pointer accent-[#0066FF]"
               />
             </div>
           </div>
           <button
             type="submit"
             disabled={creating}
-            className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 text-xs shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50"
+            className="w-full rounded-lg bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2.5 text-xs shadow-sm shadow-blue-600/20 transition-all disabled:opacity-50"
           >
             {creating ? 'Criando...' : 'Cadastrar Novo Usuário'}
           </button>
@@ -229,28 +229,28 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
 
         {/* Users List */}
         <div className="space-y-2.5">
-          <h3 className="text-xs font-semibold text-slate-300">Usuários Cadastrados ({users.length})</h3>
+          <h3 className="text-xs font-bold text-slate-700">Usuários Cadastrados ({users.length})</h3>
           {users.map((u) => (
-            <div key={u.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div key={u.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-white transition-all">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-white">{u.email}</span>
+                  <span className="text-xs font-bold text-slate-900">{u.email}</span>
                   {u.is_admin === 1 && (
-                    <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                      <Shield className="w-3 h-3" /> Admin
+                    <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Shield className="w-3 h-3 text-amber-600" /> Admin
                     </span>
                   )}
                   {u.is_active === 1 ? (
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
                       Ativo
                     </span>
                   ) : (
-                    <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full font-medium">
+                    <span className="text-[10px] bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full font-bold">
                       Bloqueado
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-500">ID: {u.id}</p>
+                <p className="text-[10px] text-slate-500 font-mono">ID: {u.id}</p>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
@@ -261,17 +261,17 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
                       placeholder="Nova senha"
                       value={resetPasswordValue}
                       onChange={(e) => setResetPasswordValue(e.target.value)}
-                      className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 w-32 focus:outline-none"
+                      className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 w-32 focus:outline-none"
                     />
                     <button
                       onClick={() => handleResetPassword(u.id)}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium"
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
                     >
                       Salvar
                     </button>
                     <button
                       onClick={() => { setResetUserId(null); setResetPasswordValue('') }}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs"
+                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs"
                     >
                       X
                     </button>
@@ -279,15 +279,15 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
                 ) : (
                   <button
                     onClick={() => setResetUserId(u.id)}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium flex items-center gap-1"
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
                   >
-                    <Key className="w-3 h-3" /> Nova Senha
+                    <Key className="w-3 h-3 text-slate-500" /> Nova Senha
                   </button>
                 )}
 
                 <button
                   onClick={() => handleRegenerateKey(u.id)}
-                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg text-xs font-medium"
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-[#0066FF] border border-slate-200 rounded-lg text-xs font-semibold"
                   title="Gerar nova API Key"
                 >
                   API Key
@@ -295,10 +295,10 @@ export default function UserManagementTab({ apiKey }: { apiKey: string }) {
 
                 <button
                   onClick={() => handleToggleActive(u.id, u.is_active)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                     u.is_active === 1
-                      ? 'bg-rose-950/40 text-rose-400 border border-rose-500/20 hover:bg-rose-900/50'
-                      : 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-900/50'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                   }`}
                 >
                   {u.is_active === 1 ? 'Bloquear' : 'Ativar'}

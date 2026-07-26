@@ -19,9 +19,9 @@ from src.indexer import index_videos_folder
 import asyncio
 
 app = FastAPI(
-    title="Reels Cloner API",
-    description="API webhook e plataforma para clonagem de Reels com suporte a Atalho do iPhone e Dashboard Next.js",
-    version="2.0.0",
+    title="Clonify AI API",
+    description="API para clonagem e automação de Reels do Instagram",
+    version="1.0.0"
 )
 
 @app.on_event("startup")
@@ -238,7 +238,7 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         user = repo.get_user_by_id(user_id) or {}
         ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
         ig_token = user.get("instagram_access_token") or settings.instagram_access_token
-        user_caption = user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
+        user_caption = user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
         stf = bool(user.get("share_to_feed", 0))
         raw_interval = user.get("default_post_interval_hours")
         interval_hours = int(raw_interval) if raw_interval is not None else 3
@@ -767,7 +767,7 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
 
     from src.instagram_publisher import InstagramPublisher
     publisher = InstagramPublisher()
-    final_caption = caption or job.get("caption") or user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
+    final_caption = caption or job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
     stf = bool(share_to_feed if share_to_feed is not None else job.get("share_to_feed", user.get("share_to_feed", 0)))
 
     result = publisher.publish_reel(

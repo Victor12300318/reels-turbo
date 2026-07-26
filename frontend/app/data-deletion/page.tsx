@@ -8,7 +8,7 @@ export default function DataDeletionPage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-indigo-400">Como Solicitar a Exclusão dos Seus Dados</h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Você tem o direito de solicitar a exclusão completa de todos os seus dados pessoais da plataforma Reels Cloner AI a qualquer momento, em conformidade com a LGPD (Lei Geral de Proteção de Dados) e as políticas da Meta.
+            Você tem o direito de solicitar a exclusão completa de todos os seus dados pessoais da plataforma Clonify AI a qualquer momento, em conformidade com a LGPD (Lei Geral de Proteção de Dados) e as políticas da Meta.
           </p>
         </section>
 

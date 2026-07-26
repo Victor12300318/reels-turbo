@@ -8,14 +8,14 @@ export default function TermsOfServicePage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-indigo-400">1. Aceitação dos Termos</h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Ao utilizar o Reels Cloner AI, você concorda integralmente com estes Termos de Uso. Se você não concorda com qualquer um dos termos aqui descritos, não utilize o serviço.
+            Ao utilizar o Clonify AI, você concorda integralmente com estes Termos de Uso. Se você não concorda com qualquer um dos termos aqui descritos, não utilize o serviço.
           </p>
         </section>
 
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-indigo-400">2. Descrição do Serviço</h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            O Reels Cloner AI é uma plataforma de automação que permite aos usuários clonar Reels do Instagram utilizando vídeos locais como fonte, com sobreposição de texto via IA (Gemini), renderização via FFmpeg, e publicação automática através da Meta Graph API.
+            O Clonify AI é uma plataforma de automação que permite aos usuários clonar Reels do Instagram utilizando vídeos locais como fonte, com sobreposição de texto via IA (Gemini/OpenRouter), renderização via FFmpeg, e publicação automática através da Meta Graph API.
           </p>
         </section>
 

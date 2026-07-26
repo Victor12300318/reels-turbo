@@ -635,8 +635,8 @@ export default function DashboardPage() {
                 <Sparkles className="w-5 h-5 text-[#0066FF]" />
               </div>
               <div>
-                <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Reels Cloner</h1>
-                <p className="text-[10px] text-blue-600 font-medium">ManyChat Edition</p>
+                <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Clonify AI</h1>
+                <p className="text-[10px] text-blue-600 font-medium">Automação de Conteúdo</p>
               </div>
             </div>
           )}
@@ -715,7 +715,7 @@ export default function DashboardPage() {
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Reels Cloner</h1>
+            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">Clonify AI</h1>
             <p className="text-[10px] text-slate-500 truncate max-w-[160px]">{userEmail}</p>
           </div>
         </div>
@@ -743,7 +743,7 @@ export default function DashboardPage() {
                 {activeTab === 'users' && <>Gestão de Usuários</>}
               </h2>
               <p className="text-xs md:text-sm text-slate-500 mt-1">
-                Automação de conteúdo visual para o Instagram no padrão ManyChat.
+                Automação e clonagem inteligente de conteúdo visual para o Instagram.
               </p>
             </div>
 

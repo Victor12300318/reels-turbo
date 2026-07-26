@@ -49,7 +49,7 @@ def process_due_scheduled_jobs(repo: Any) -> int:
         try:
             logger.info(f"Auto-publishing scheduled job {job['id']} to Instagram...")
             publisher = InstagramPublisher()
-            caption = job.get("caption") or user.get("default_caption_suffix") or "Clonado com Reels Cloner AI #reels"
+            caption = job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
             share_to_feed = bool(job.get("share_to_feed", user.get("share_to_feed", 0)))
 
             publisher.publish_reel(

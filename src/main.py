@@ -158,7 +158,7 @@ def clone_command(args: argparse.Namespace):
 
 
 def main(argv: list[str] | None = None):
-    parser = argparse.ArgumentParser(description="Reels Cloner MVP")
+    parser = argparse.ArgumentParser(description="Clonify AI CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     index_parser = subparsers.add_parser("index", help="Index local videos")

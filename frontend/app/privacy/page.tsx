@@ -8,7 +8,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-indigo-400">1. Introdução</h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            O Reels Cloner AI ("nós", "nosso" ou "aplicativo") respeita a privacidade dos seus usuários. Esta Política de Privacidade descreve como coletamos, usamos, armazenamos e protegemos seus dados pessoais ao utilizar nossa plataforma de clonagem e automação de Reels do Instagram.
+            O Clonify AI ("nós", "nosso" ou "aplicativo") respeita a privacidade dos seus usuários. Esta Política de Privacidade descreve como coletamos, usamos, armazenamos e protegemos seus dados pessoais ao utilizar nossa plataforma de clonagem e automação de Reels do Instagram.
           </p>
         </section>
 

@@ -732,9 +732,13 @@ def cancel_job_schedule_endpoint(job_id: str, request: Request, x_api_key: str |
     if not job or job["user_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Job não encontrado.")
 
+    old_scheduled_at = job.get("scheduled_at")
     success = repo.cancel_job_schedule(job_id)
     if not success:
         raise HTTPException(status_code=500, detail="Falha ao cancelar o agendamento.")
+
+    if old_scheduled_at:
+        repo.shift_schedule_queue_after_posting(user["id"], old_scheduled_at)
 
     return {
         "status": "success",
@@ -756,8 +760,14 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if not job or job["user_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Job não encontrado.")
 
+    if job.get("posted_at"):
+        raise HTTPException(status_code=400, detail="Este vídeo já foi publicado no Instagram.")
+
     if job["status"] not in ("completed", "scheduled") or not job.get("output_path"):
         raise HTTPException(status_code=400, detail="Vídeo ainda não foi renderizado ou falhou.")
+
+    old_scheduled_at = job.get("scheduled_at")
+    was_scheduled = job.get("status") == "scheduled" or bool(old_scheduled_at)
 
     ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
     ig_token = user.get("instagram_access_token") or settings.instagram_access_token
@@ -779,6 +789,9 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     )
 
     repo.mark_job_posted(job_id)
+
+    if was_scheduled and old_scheduled_at:
+        repo.shift_schedule_queue_after_posting(user["id"], old_scheduled_at)
 
     return {
         "status": "success",

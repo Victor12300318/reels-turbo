@@ -561,9 +561,46 @@ class VideoRepository:
         try:
             with conn:
                 conn.execute(
-                    f"UPDATE jobs SET status = 'completed', posted_at = {self._ph(1)}, updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    f"UPDATE jobs SET status = 'completed', scheduled_at = NULL, posted_at = {self._ph(1)}, updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
                     (now, now, job_id)
                 )
+        finally:
+            conn.close()
+
+    def shift_schedule_queue_after_posting(self, user_id: str, old_scheduled_at: str) -> None:
+        """
+        When a scheduled job at old_scheduled_at is published early or cancelled,
+        shift all subsequent scheduled jobs for this user forward by 1 slot.
+        """
+        if not old_scheduled_at or not user_id:
+            return
+
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            cursor = conn.execute(
+                f"SELECT id, scheduled_at FROM jobs WHERE user_id = {ph} AND status = 'scheduled' AND scheduled_at > {ph} ORDER BY scheduled_at ASC",
+                (user_id, old_scheduled_at)
+            )
+            rows = cursor.fetchall()
+            scheduled_jobs = [dict(r) for r in rows]
+
+            if not scheduled_jobs:
+                return
+
+            now = datetime.now(timezone.utc).isoformat()
+            next_target_time = old_scheduled_at
+
+            with conn:
+                for job in scheduled_jobs:
+                    job_id = job["id"] if isinstance(job, dict) else job[0]
+                    current_time = job["scheduled_at"] if isinstance(job, dict) else job[1]
+
+                    conn.execute(
+                        f"UPDATE jobs SET scheduled_at = {ph}, updated_at = {ph} WHERE id = {ph}",
+                        (next_target_time, now, job_id)
+                    )
+                    next_target_time = current_time
         finally:
             conn.close()
 

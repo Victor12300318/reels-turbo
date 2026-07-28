@@ -2,7 +2,7 @@
 
 **Data da Atualização:** 25 de Julho de 2026  
 **Último Commit:** `6243d87` na branch `main` (`origin/main`)  
-**Status do Projeto:** Estável (50/50 testes passando no `pytest`)
+**Status do Projeto:** Estável (51/51 testes passando no `pytest`)
 
 ---
 
@@ -41,6 +41,11 @@ O **Clonify AI** (anteriormente chamado *Reels Cloner MVP*) é um SaaS de automa
    - **Feedback de Publicação:** Estado de carregamento individual no botão "Postar Agora" para evitar múltiplos cliques.
    - **Tratamento Safari/iOS:** Proteção contra exceções de `new Notification()` em navegadores móveis sem suporte completo a notificações web.
    - **Badges de Status:** Distinção visual clara entre *Postado* (Data de postagem), *Agendado* (Data/hora futura) e *Pronto para Postar*.
+
+5. **Proteção Rigorosa Contra Sobreposição de Texto em Rostos (`src/video_processor.py` & `src/analyzer.py`):**
+   - **Zona Segura Forçada:** Sempre que um rosto/pessoa for detectado no vídeo (padrão em vídeos selfie/talking-head), a posição do texto é forçada para a zona inferior limpa (área do peito/torso, $y = 62\% \to 79\%$).
+   - **Quebra de Linhas Responsiva:** Texto formatado com no máximo 26 caracteres por linha e restrição de largura a $78\%$ da tela para manter margens laterais limpas longe dos botões de ação do Instagram (curtir/comentar/compartilhar).
+   - **Eliminação de Texto Central/Superior sobre Rostos:** Impede que o texto cubra olhos, boca, nariz ou testa (evitando o problema visto nas imagens de exemplo).
 
 ---
 

@@ -9,7 +9,7 @@ def test_detect_face_position():
     analyzer = VideoAnalyzer(mock_client)
     img = Image.new("RGB", (10, 10), color="blue")
     result = analyzer.detect_face_position(img)
-    assert result == "top"
+    assert result == "upper"
 
 
 def test_extract_text():

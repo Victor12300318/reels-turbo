@@ -66,3 +66,23 @@ def test_sanitize_text_for_ffmpeg():
     assert "🔥" not in sanitized
 
 
+def test_face_avoidance_forces_bottom_safe_zone():
+    import re
+    from src.video_processor import _build_drawtext_filter
+    # Even if style specifies position_vertical: "center" or "top", upper face position forces bottom
+    style = {"position_vertical": "center", "font_color": "white"}
+    filter_str = _build_drawtext_filter(
+        text="Texto de teste para sobreposição de vídeo",
+        style=style,
+        face_position="upper",
+        video_width=1080,
+        video_height=1920,
+        font_path="font.ttf"
+    )
+    y_matches = re.findall(r':y=(\d+)', filter_str)
+    assert len(y_matches) > 0
+    # For 1920 height, y should be in lower torso safe zone (>= 1200) and below face
+    for y_val in y_matches:
+        assert int(y_val) >= 1200
+
+

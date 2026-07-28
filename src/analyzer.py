@@ -141,17 +141,25 @@ IMPORTANTE:
 
     def detect_face_position(self, frame: Image.Image) -> str:
         prompt = """
-Look at this frame from a short video. Where is the main person's face located vertically?
-Answer with exactly one word: top, center, or bottom. If no face is visible, answer bottom.
+Look at this frame from a short vertical video. Where is the main person's face/head located vertically?
+Answer with exactly one word:
+- upper (if the face/head is in the top half or center of the frame)
+- lower (if the face/head is strictly in the bottom third of the frame)
+- none (if no face is visible)
+
+Reply with ONLY ONE WORD: upper, lower, or none.
 """
         try:
             result = self.client.analyze([frame], prompt)
             position = str(result).strip().lower()
-            if position in ("top", "center", "bottom"):
-                return position
+            if "lower" in position or "bottom" in position:
+                return "lower"
+            if "none" in position or "no" in position:
+                return "none"
+            return "upper"
         except Exception as e:
             logger.error(f"Error calling Gemini in detect_face_position: {e}")
-        return "bottom"
+            return "upper"
 
     def analyze_text_style(self, frames: list[Image.Image]) -> dict[str, Any]:
         prompt = """

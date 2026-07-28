@@ -173,7 +173,7 @@ def _build_drawtext_filter(
     if not text.strip():
         text = "Confira esse conteúdo!"
 
-    max_line_chars = 32
+    max_line_chars = 26
     wrapped_text = _wrap_text(text, max_chars_per_line=max_line_chars)
     lines = [line.strip() for line in wrapped_text.split("\n") if line.strip()]
 
@@ -196,32 +196,32 @@ def _build_drawtext_filter(
     vertical = style.get("position_vertical", "bottom")
     horizontal = style.get("position_horizontal", "center")
 
-    # Avoid placing text where the face is
-    if vertical == "top" and face_position in ("top", "center"):
+    # FACE PROTECTION & SAFE ZONE FORCE:
+    # Unless face is strictly in lower third ('lower'), always force placement to 'bottom'
+    # (safe chest/lower torso zone, y = 62-79%).
+    # This prevents text from landing on eyes, mouth, face or forehead.
+    if face_position in ("upper", "top", "center", "middle", "none") or face_position != "lower":
         vertical = "bottom"
-    elif vertical == "bottom" and face_position == "bottom":
+    elif face_position == "lower":
         vertical = "top"
-
-    padding_pct = int(style.get("padding_from_edge", 5))
-    padding = int(video_height * (padding_pct / 100))
-    
-    if vertical == "bottom":
-        safe_padding = int(video_height * 0.16)
-        padding = max(padding, safe_padding)
-    elif vertical == "top":
-        safe_top_padding = int(video_height * 0.14)
-        padding = max(padding, safe_top_padding)
-    else:
-        padding = max(40, min(padding, 120))
 
     line_spacing = int(font_size * 0.2)
     total_height = len(lines) * font_size + (len(lines) - 1) * line_spacing
 
-    if vertical == "top":
-        base_y = padding
-    elif vertical == "bottom":
+    padding_pct = int(style.get("padding_from_edge", 20))
+
+    if vertical == "bottom":
+        # 20% safe bottom padding clears Instagram comment box & username (y >= 80%),
+        # keeping text in clean chest/torso area below chin (y = 62-79%).
+        safe_padding = int(video_height * 0.20)
+        padding = max(int(video_height * (padding_pct / 100)), safe_padding)
         base_y = video_height - padding - total_height
+    elif vertical == "top":
+        safe_top_padding = int(video_height * 0.16)
+        padding = max(int(video_height * (padding_pct / 100)), safe_top_padding)
+        base_y = padding
     else:
+        padding = max(40, min(int(video_height * (padding_pct / 100)), 120))
         base_y = (video_height - total_height) / 2
 
     # Determine x position expression
@@ -294,8 +294,8 @@ def _responsive_font_size(
     available_height_per_line = max_block_height / n_lines
     fit_by_height = int(available_height_per_line / 1.3)
 
-    # Fit inside width (assume average glyph width ~0.55 * font_size)
-    target_width = video_width * 0.88
+    # Fit inside width (target 78% of video width to keep 11% padding away from Instagram right-side buttons)
+    target_width = video_width * 0.78
     fit_by_width = int(target_width / (longest * 0.55))
 
     font_size = min(base_size, fit_by_height, fit_by_width)

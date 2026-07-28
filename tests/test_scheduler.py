@@ -14,6 +14,29 @@ def test_calculate_batch_timestamps():
     assert "2026-07-25T18:00:00" in timestamps[2]
 
 
+def test_safe_posting_window_adjustment():
+    from datetime import datetime, timezone
+    from src.scheduler import adjust_to_safe_posting_window
+
+    # 02:00 AM UTC-3 is 05:00 UTC -> should bump to 06:00 AM UTC-3 (09:00 UTC)
+    late_night_utc = datetime(2026, 7, 25, 5, 0, tzinfo=timezone.utc)
+    safe_dt = adjust_to_safe_posting_window(late_night_utc, timezone_offset_hours=-3)
+
+    local_hour = (safe_dt.hour - 3) % 24
+    assert local_hour == 6
+
+    # 14:00 PM UTC-3 (17:00 UTC) -> stays 14:00 UTC-3 (17:00 UTC)
+    daytime_utc = datetime(2026, 7, 25, 17, 0, tzinfo=timezone.utc)
+    safe_dt_day = adjust_to_safe_posting_window(daytime_utc, timezone_offset_hours=-3)
+    assert safe_dt_day == daytime_utc
+
+    # 22:00 PM UTC-3 (01:00 UTC next day) -> bumps to 06:00 AM UTC-3 next day
+    night_utc = datetime(2026, 7, 26, 1, 0, tzinfo=timezone.utc)
+    safe_dt_night = adjust_to_safe_posting_window(night_utc, timezone_offset_hours=-3)
+    local_hour_night = (safe_dt_night.hour - 3) % 24
+    assert local_hour_night == 6
+
+
 def test_early_publish_and_queue_shift_scenario(tmp_path, monkeypatch):
     import uuid
     from src.database import VideoRepository

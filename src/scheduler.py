@@ -5,9 +5,31 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def adjust_to_safe_posting_window(dt: datetime, timezone_offset_hours: int = -3) -> datetime:
+    """
+    Adjusts a datetime object so it falls strictly within the safe posting window
+    between 06:00 AM and 21:00 PM (default timezone: UTC-3 Horário de Brasília).
+    If a scheduled time falls during dead hours (21:01 to 05:59), it rolls forward to 06:00 AM.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    local_tz = timezone(timedelta(hours=timezone_offset_hours))
+    local_dt = dt.astimezone(local_tz)
+
+    if local_dt.hour < 6:
+        adjusted_local = local_dt.replace(hour=6, minute=0, second=0, microsecond=0)
+    elif local_dt.hour >= 21:
+        adjusted_local = (local_dt + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+    else:
+        adjusted_local = local_dt
+
+    return adjusted_local.astimezone(timezone.utc)
+
+
 def calculate_batch_timestamps(count: int, start_time_iso: str | None = None, interval_hours: int = 3) -> list[str]:
     """
-    Generates a list of ISO timestamps spaced by `interval_hours`.
+    Generates a list of ISO timestamps spaced by `interval_hours`, strictly within safe posting window.
     """
     if start_time_iso:
         try:
@@ -17,10 +39,18 @@ def calculate_batch_timestamps(count: int, start_time_iso: str | None = None, in
     else:
         start_dt = datetime.now(timezone.utc)
 
+    current_dt = adjust_to_safe_posting_window(start_dt)
     timestamps = []
+
     for i in range(count):
-        t = start_dt + timedelta(hours=i * interval_hours)
-        timestamps.append(t.isoformat())
+        if i == 0:
+            slot = current_dt
+        else:
+            slot = current_dt + timedelta(hours=interval_hours)
+            slot = adjust_to_safe_posting_window(slot)
+            current_dt = slot
+        timestamps.append(slot.isoformat())
+
     return timestamps
 
 

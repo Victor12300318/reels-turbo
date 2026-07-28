@@ -277,6 +277,7 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
                         except Exception:
                             pass
 
+                from src.scheduler import adjust_to_safe_posting_window
                 if scheduled_times:
                     latest_scheduled = max(scheduled_times)
                     next_slot = latest_scheduled + timedelta(hours=interval_hours)
@@ -284,6 +285,8 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
                         next_slot = now_utc
                 else:
                     next_slot = now_utc
+
+                next_slot = adjust_to_safe_posting_window(next_slot)
 
                 sched_iso = next_slot.isoformat()
                 repo.update_job_schedule(

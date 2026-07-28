@@ -78,10 +78,14 @@ class VideoRepository:
                         duration_seconds REAL,
                         has_face INTEGER,
                         frame_paths TEXT,
+                        usage_count INTEGER DEFAULT 0,
+                        last_used_at TEXT,
                         updated_at TEXT
                     )
                 """)
                 conn.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_id TEXT")
+                conn.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS usage_count INTEGER DEFAULT 0")
+                conn.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS last_used_at TEXT")
 
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS jobs (
@@ -97,6 +101,8 @@ class VideoRepository:
                         posted_at TEXT,
                         share_to_feed INTEGER DEFAULT 0,
                         original_s3_url TEXT,
+                        instagram_media_id TEXT,
+                        embedding TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
@@ -107,6 +113,23 @@ class VideoRepository:
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS posted_at TEXT")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_s3_url TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS instagram_media_id TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS embedding TEXT")
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS media_insights (
+                        id TEXT PRIMARY KEY,
+                        job_id TEXT,
+                        instagram_media_id TEXT UNIQUE,
+                        views INTEGER DEFAULT 0,
+                        likes INTEGER DEFAULT 0,
+                        comments INTEGER DEFAULT 0,
+                        shares INTEGER DEFAULT 0,
+                        reach INTEGER DEFAULT 0,
+                        engagement_score REAL DEFAULT 0.0,
+                        synced_at TEXT
+                    )
+                """)
 
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS system_settings (
@@ -172,6 +195,8 @@ class VideoRepository:
                             duration_seconds REAL,
                             has_face INTEGER,
                             frame_paths TEXT,
+                            usage_count INTEGER DEFAULT 0,
+                            last_used_at TEXT,
                             updated_at TEXT
                         )
                     """)
@@ -179,6 +204,10 @@ class VideoRepository:
                     cols = [row[1] for row in cursor.fetchall()]
                     if "user_id" not in cols:
                         conn.execute("ALTER TABLE videos ADD COLUMN user_id TEXT")
+                    if "usage_count" not in cols:
+                        conn.execute("ALTER TABLE videos ADD COLUMN usage_count INTEGER DEFAULT 0")
+                    if "last_used_at" not in cols:
+                        conn.execute("ALTER TABLE videos ADD COLUMN last_used_at TEXT")
 
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS jobs (
@@ -194,6 +223,8 @@ class VideoRepository:
                             posted_at TEXT,
                             share_to_feed INTEGER DEFAULT 0,
                             original_s3_url TEXT,
+                            instagram_media_id TEXT,
+                            embedding TEXT,
                             created_at TEXT NOT NULL,
                             updated_at TEXT NOT NULL
                         )
@@ -212,6 +243,25 @@ class VideoRepository:
                         conn.execute("ALTER TABLE jobs ADD COLUMN share_to_feed INTEGER DEFAULT 0")
                     if "original_s3_url" not in cols:
                         conn.execute("ALTER TABLE jobs ADD COLUMN original_s3_url TEXT")
+                    if "instagram_media_id" not in cols:
+                        conn.execute("ALTER TABLE jobs ADD COLUMN instagram_media_id TEXT")
+                    if "embedding" not in cols:
+                        conn.execute("ALTER TABLE jobs ADD COLUMN embedding TEXT")
+
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS media_insights (
+                            id TEXT PRIMARY KEY,
+                            job_id TEXT,
+                            instagram_media_id TEXT UNIQUE,
+                            views INTEGER DEFAULT 0,
+                            likes INTEGER DEFAULT 0,
+                            comments INTEGER DEFAULT 0,
+                            shares INTEGER DEFAULT 0,
+                            reach INTEGER DEFAULT 0,
+                            engagement_score REAL DEFAULT 0.0,
+                            synced_at TEXT
+                        )
+                    """)
         finally:
             conn.close()
 
@@ -405,6 +455,128 @@ class VideoRepository:
                 cursor = conn.execute("SELECT * FROM videos")
             rows = cursor.fetchall()
             return [_parse_row(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_video_by_id(self, video_id: Any) -> dict[str, Any] | None:
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            cursor = conn.execute(f"SELECT * FROM videos WHERE id = {ph}", (video_id,))
+            row = cursor.fetchone()
+            return _parse_row(dict(row)) if row else None
+        finally:
+            conn.close()
+
+    def increment_video_usage(self, video_id: Any) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            with conn:
+                conn.execute(
+                    f"UPDATE videos SET usage_count = COALESCE(usage_count, 0) + 1, last_used_at = {ph}, updated_at = {ph} WHERE id = {ph}",
+                    (now, now, video_id)
+                )
+        finally:
+            conn.close()
+
+    def update_job_instagram_media_id(self, job_id: str, instagram_media_id: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            with conn:
+                conn.execute(
+                    f"UPDATE jobs SET instagram_media_id = {ph}, updated_at = {ph} WHERE id = {ph}",
+                    (instagram_media_id, now, job_id)
+                )
+        finally:
+            conn.close()
+
+    def update_job_embedding(self, job_id: str, embedding_json: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            with conn:
+                conn.execute(
+                    f"UPDATE jobs SET embedding = {ph}, updated_at = {ph} WHERE id = {ph}",
+                    (embedding_json, now, job_id)
+                )
+        finally:
+            conn.close()
+
+    def upsert_media_insights(
+        self,
+        job_id: str,
+        instagram_media_id: str,
+        views: int = 0,
+        likes: int = 0,
+        comments: int = 0,
+        shares: int = 0,
+        reach: int = 0,
+        engagement_score: float = 0.0
+    ) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        insight_id = str(uuid.uuid4())
+        conn = self._connect()
+        try:
+            with conn:
+                if self.is_postgres:
+                    conn.execute("""
+                        INSERT INTO media_insights (
+                            id, job_id, instagram_media_id, views, likes, comments, shares, reach, engagement_score, synced_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT(instagram_media_id) DO UPDATE SET
+                            views=EXCLUDED.views,
+                            likes=EXCLUDED.likes,
+                            comments=EXCLUDED.comments,
+                            shares=EXCLUDED.shares,
+                            reach=EXCLUDED.reach,
+                            engagement_score=EXCLUDED.engagement_score,
+                            synced_at=EXCLUDED.synced_at
+                    """, (insight_id, job_id, instagram_media_id, views, likes, comments, shares, reach, engagement_score, now))
+                else:
+                    conn.execute("""
+                        INSERT INTO media_insights (
+                            id, job_id, instagram_media_id, views, likes, comments, shares, reach, engagement_score, synced_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(instagram_media_id) DO UPDATE SET
+                            views=excluded.views,
+                            likes=excluded.likes,
+                            comments=excluded.comments,
+                            shares=excluded.shares,
+                            reach=excluded.reach,
+                            engagement_score=excluded.engagement_score,
+                            synced_at=excluded.synced_at
+                    """, (insight_id, job_id, instagram_media_id, views, likes, comments, shares, reach, engagement_score, now))
+        finally:
+            conn.close()
+
+    def get_top_performing_reels(self, user_id: str | None = None, top_k: int = 5) -> list[dict[str, Any]]:
+        conn = self._connect()
+        try:
+            if user_id:
+                ph = self._ph(1)
+                cursor = conn.execute(f"""
+                    SELECT j.id, j.caption, j.url, m.views, m.likes, m.comments, m.shares, m.reach, m.engagement_score
+                    FROM jobs j
+                    JOIN media_insights m ON j.instagram_media_id = m.instagram_media_id
+                    WHERE j.user_id = {ph}
+                    ORDER BY m.engagement_score DESC
+                    LIMIT {top_k}
+                """, (user_id,))
+            else:
+                cursor = conn.execute(f"""
+                    SELECT j.id, j.caption, j.url, m.views, m.likes, m.comments, m.shares, m.reach, m.engagement_score
+                    FROM jobs j
+                    JOIN media_insights m ON j.instagram_media_id = m.instagram_media_id
+                    ORDER BY m.engagement_score DESC
+                    LIMIT {top_k}
+                """)
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
         finally:
             conn.close()
 

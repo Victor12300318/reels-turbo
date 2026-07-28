@@ -119,3 +119,40 @@ def test_system_settings_operations(repo):
     assert all_settings["openrouter_model"] == "openai/gpt-4o-mini"
 
 
+def test_video_usage_increment_and_insights(repo):
+    user = repo.create_user(email="insights@test.com", password_hash="hash", api_key="key_insights")
+    repo.upsert({
+        "path": "C:\\videos\\v1.mp4",
+        "filename": "v1.mp4",
+        "description": "Video 1",
+        "themes": "test",
+        "orientation": "portrait",
+        "duration_seconds": 10.0,
+        "has_face": 0,
+        "frame_paths": ["f1.jpg"],
+    }, user_id=user["id"])
+    
+    video = repo.get_by_path("C:\\videos\\v1.mp4")
+    assert video is not None
+    repo.increment_video_usage(video["id"])
+    v_updated = repo.get_video_by_id(video["id"])
+    assert v_updated["usage_count"] == 1
+    assert v_updated["last_used_at"] is not None
+
+    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/123/")
+    repo.update_job_instagram_media_id(job["id"], "media_999")
+    repo.upsert_media_insights(
+        job_id=job["id"],
+        instagram_media_id="media_999",
+        views=15000,
+        likes=800,
+        comments=45,
+        shares=120,
+        reach=18000,
+        engagement_score=19500.0
+    )
+    top_reels = repo.get_top_performing_reels(user_id=user["id"], top_k=5)
+    assert len(top_reels) == 1
+    assert top_reels[0]["views"] == 15000
+
+

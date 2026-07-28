@@ -87,6 +87,9 @@ class OpenRouterClient:
                 else:
                     raise e
 
+    def get_embedding(self, text: str) -> list[float]:
+        return []
+
 
 def get_ai_client(repo=None):
     from src.config import get_settings

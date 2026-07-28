@@ -4,6 +4,27 @@ from PIL import Image
 from src.gemini_client import GeminiClient
 
 
+def get_top_performing_reels_context(repo: Any, user_id: str | None = None, top_k: int = 5) -> str:
+    if not repo:
+        return ""
+    try:
+        top_reels = repo.get_top_performing_reels(user_id=user_id, top_k=top_k)
+        if not top_reels:
+            return ""
+
+        lines = ["\nHISTÓRICO DE REELS DE MAIOR DESEMPENHO DO USUÁRIO (RAG):"]
+        for idx, r in enumerate(top_reels, 1):
+            views = r.get("views", 0)
+            likes = r.get("likes", 0)
+            caption = (r.get("caption") or "").replace("\n", " ")[:120]
+            lines.append(f"{idx}. [{views} views, {likes} likes] Legenda/Gancho: '{caption}'")
+
+        lines.append("Instrução: Dê preferência a estilos e opções de vídeo que se alinhem com a estrutura desses Reels de alto engajamento.\n")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 class Matcher:
     def __init__(self, client: Any):
         self.client = client
@@ -13,10 +34,14 @@ class Matcher:
         reference_description: str,
         candidates: list[dict[str, Any]],
         top_k: int = 3,
+        repo: Any = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        rag_context = get_top_performing_reels_context(repo, user_id=user_id) if repo else ""
+
         prompt = f"""
 Reference video description: {reference_description}
-
+{rag_context}
 Local videos:
 """
         for idx, c in enumerate(candidates, 1):

@@ -74,6 +74,21 @@ class GeminiClient:
         image.save(buffer, format="JPEG", quality=90)
         return Part.from_bytes(data=buffer.getvalue(), mime_type="image/jpeg")
 
+    def get_embedding(self, text: str) -> list[float]:
+        try:
+            res = self.client.models.embed_content(
+                model="text-embedding-004",
+                contents=text
+            )
+            if hasattr(res, "embeddings") and res.embeddings:
+                emb = res.embeddings[0]
+                if hasattr(emb, "values"):
+                    return list(emb.values)
+            return []
+        except Exception as e:
+            logger.error(f"Error generating embedding via Gemini API: {e}")
+            return []
+
 
 def _repair_json_string(s: str) -> str:
     s = s.strip()

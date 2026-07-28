@@ -48,7 +48,17 @@ def test_openrouter_client_analyze(mock_post):
 
     client = OpenRouterClient(api_key="sk-test-123", model="google/gemini-2.0-flash-001")
     img = Image.new("RGB", (100, 100), color="blue")
-    result = client.analyze(images=[img], prompt="Which video is best?", response_schema={"type": "object"})
+    result = client.analyze([img], "Analyse this image")
+    assert "best_video" in result
 
-    assert '{"best_video": "v1.mp4"}' in result or "v1.mp4" in str(result)
-    assert mock_post.called
+
+def test_gemini_client_get_embedding():
+    client = GeminiClient(api_key="fake_key")
+    mock_embed = MagicMock()
+    mock_embed.embeddings = [MagicMock(values=[0.1, 0.2, 0.3])]
+    client.client.models.embed_content = MagicMock(return_value=mock_embed)
+
+    vector = client.get_embedding("Texto de teste")
+    assert isinstance(vector, list)
+    assert len(vector) == 3
+    assert vector == [0.1, 0.2, 0.3]

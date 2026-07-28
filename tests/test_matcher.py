@@ -25,3 +25,19 @@ def test_select_best_video():
     top = [{"path": "a.mp4", "frame_paths": []}, {"path": "b.mp4", "frame_paths": []}]
     winner = matcher.select_best_video(ref_frames, top)
     assert winner["path"] == "b.mp4"
+
+
+def test_matcher_weighted_usage_penalty():
+    mock_client = MagicMock()
+    # LLM ranks candidate 1 (id 1) higher than candidate 2 (id 2) based on content alone
+    mock_client.analyze.return_value = '{"ranking": [{"video_id": 1, "reason": "Good match"}, {"video_id": 2, "reason": "Ok match"}]}'
+
+    matcher = Matcher(mock_client)
+    candidates = [
+        {"id": 1, "description": "Vid 1", "usage_count": 5, "last_used_at": "2026-07-25T10:00:00Z"},
+        {"id": 2, "description": "Vid 2", "usage_count": 0, "last_used_at": None},
+    ]
+
+    ranked = matcher.rank_candidates("reference description", candidates, top_k=2)
+    # Candidate 2 (never used) should be boosted over candidate 1 (used 5 times)
+    assert ranked[0]["id"] == 2

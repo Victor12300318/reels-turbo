@@ -102,6 +102,11 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
 
     winner = matcher.select_best_video(ref_frames, ranked[:3])
     logging.info(f"Selected local video: {winner['path']}")
+    if winner.get("id"):
+        try:
+            repo.increment_video_usage(winner["id"])
+        except Exception as e_usage:
+            logging.warning(f"Could not increment video usage count: {e_usage}")
 
     if progress_callback:
         progress_callback(80, "Renderizando vídeo final com áudio e overlay...")

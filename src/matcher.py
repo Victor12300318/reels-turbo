@@ -49,23 +49,52 @@ IMPORTANT: Never use double quotes (") inside the text fields of the JSON (like 
         data = json.loads(raw) if isinstance(raw, str) else raw
         ranking = data.get("ranking", [])
         
-        ordered = []
-        for r in ranking:
-            vid_id = r.get("video_id")
-            if vid_id is not None:
-                try:
-                    target_id = int(vid_id)
-                    for i, c in enumerate(candidates, 1):
-                        c_id = c.get("id")
-                        if (c_id is not None and int(c_id) == target_id) or i == target_id:
-                            ordered.append(c)
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc)
+
+        # Build map of candidate id/path to base score from LLM ranking
+        scored_candidates = []
+        for c in candidates:
+            # Find candidate's rank position in LLM output
+            c_id = c.get("id")
+            c_path = c.get("path")
+            rank_idx = 999
+            for idx, r in enumerate(ranking):
+                vid_id = r.get("video_id")
+                if vid_id is not None:
+                    try:
+                        target_id = int(vid_id)
+                        if (c_id is not None and int(c_id) == target_id) or (candidates.index(c) + 1) == target_id:
+                            rank_idx = idx
                             break
-                except (ValueError, TypeError):
+                    except (ValueError, TypeError):
+                        pass
+
+            base_score = max(20.0, 100.0 - (rank_idx * 20.0)) if rank_idx < 999 else 10.0
+
+            # Usage & Recency adjustments
+            usage_count = int(c.get("usage_count", 0) or 0)
+            last_used_at = c.get("last_used_at")
+
+            bonus = 20.0 if usage_count == 0 else 0.0
+            freq_penalty = usage_count * 5.0
+
+            recency_penalty = 0.0
+            if last_used_at:
+                try:
+                    dt = datetime.fromisoformat(str(last_used_at).replace("Z", "+00:00"))
+                    days_ago = max(0.0, (now_utc - dt).total_seconds() / 86400.0)
+                    if days_ago < 7.0:
+                        recency_penalty = 30.0 * (7.0 - days_ago) / 7.0
+                except Exception:
                     pass
 
-        # Fallback to candidates in order if nothing matched
-        if not ordered:
-            return candidates[:top_k]
+            adjusted_score = base_score + bonus - freq_penalty - recency_penalty
+            scored_candidates.append((adjusted_score, c))
+
+        scored_candidates.sort(key=lambda x: x[0], reverse=True)
+        ordered = [item[1] for item in scored_candidates]
+
         return ordered[:top_k]
 
     def select_best_video(

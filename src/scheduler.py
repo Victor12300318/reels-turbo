@@ -82,16 +82,75 @@ def process_due_scheduled_jobs(repo: Any) -> int:
             caption = job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
             share_to_feed = bool(job.get("share_to_feed", user.get("share_to_feed", 0)))
 
-            publisher.publish_reel(
+            res = publisher.publish_reel(
                 video_url=job["output_path"],
                 caption=caption,
                 instagram_account_id=ig_account_id,
                 access_token=ig_token,
                 share_to_feed=share_to_feed
             )
+            media_id = res.get("id") if isinstance(res, dict) else None
+            if media_id:
+                repo.update_job_instagram_media_id(job["id"], media_id)
             repo.mark_job_posted(job["id"])
             processed_count += 1
         except Exception as e:
             logger.error(f"Failed to publish scheduled job {job['id']}: {e}")
 
     return processed_count
+
+
+def sync_meta_insights(repo: Any) -> int:
+    """
+    Polls all posted jobs with an instagram_media_id and fetches updated performance metrics from Meta Graph API.
+    """
+    conn = repo._connect()
+    try:
+        cursor = conn.execute("SELECT id, user_id, instagram_media_id FROM jobs WHERE instagram_media_id IS NOT NULL AND status = 'completed'")
+        rows = cursor.fetchall()
+        posted_jobs = [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+    if not posted_jobs:
+        return 0
+
+    from src.instagram_publisher import InstagramPublisher
+    publisher = InstagramPublisher()
+    updated_count = 0
+
+    for job in posted_jobs:
+        job_id = job["id"]
+        media_id = job["instagram_media_id"]
+        user_id = job.get("user_id")
+
+        if not media_id:
+            continue
+
+        user = repo.get_user_by_id(user_id) if user_id else {}
+        token = (user or {}).get("instagram_access_token")
+
+        if not token:
+            from src.config import get_settings
+            token = get_settings().instagram_access_token
+
+        if not token:
+            continue
+
+        try:
+            metrics = publisher.fetch_media_insights(media_id, token)
+            repo.upsert_media_insights(
+                job_id=job_id,
+                instagram_media_id=media_id,
+                views=metrics.get("views", 0),
+                likes=metrics.get("likes", 0),
+                comments=metrics.get("comments", 0),
+                shares=metrics.get("shares", 0),
+                reach=metrics.get("reach", 0),
+                engagement_score=metrics.get("engagement_score", 0.0)
+            )
+            updated_count += 1
+        except Exception as e:
+            logger.warning(f"Failed to sync insights for job {job_id} / media {media_id}: {e}")
+
+    return updated_count

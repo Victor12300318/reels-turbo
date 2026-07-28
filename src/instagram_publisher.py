@@ -103,6 +103,56 @@ class InstagramPublisher:
         }
         res = httpx.post(url, data=payload, timeout=60.0)
         data = res.json()
-        if res.status_code != 200 or "id" not in data:
-            raise RuntimeError(f"Failed to publish Instagram Reels container: {data}")
+        if res.status_code == 200 and "id" in data:
+            return data
+        raise RuntimeError(f"Failed to publish Instagram Reels container: {data}")
+
+    def fetch_media_insights(self, media_id: str, access_token: str) -> dict:
+        metrics = {
+            "views": 0,
+            "likes": 0,
+            "comments": 0,
+            "shares": 0,
+            "reach": 0,
+            "engagement_score": 0.0
+        }
+        if not media_id or not access_token:
+            return metrics
+
+        for base_url in self._get_base_urls(access_token):
+            url = f"{base_url}/{media_id}/insights"
+            params = {
+                "metric": "plays,likes,comments,shares,reach",
+                "access_token": access_token
+            }
+            try:
+                res = httpx.get(url, params=params, timeout=30.0)
+                if res.status_code == 200:
+                    data = res.json().get("data", [])
+                    for item in data:
+                        name = item.get("name")
+                        values = item.get("values", [])
+                        val = values[0].get("value", 0) if values else 0
+                        if name in ("plays", "views"):
+                            metrics["views"] = int(val)
+                        elif name == "likes":
+                            metrics["likes"] = int(val)
+                        elif name == "comments":
+                            metrics["comments"] = int(val)
+                        elif name == "shares":
+                            metrics["shares"] = int(val)
+                        elif name == "reach":
+                            metrics["reach"] = int(val)
+
+                    metrics["engagement_score"] = float(
+                        metrics["views"] +
+                        (metrics["likes"] * 3.0) +
+                        (metrics["comments"] * 5.0) +
+                        (metrics["shares"] * 7.0)
+                    )
+                    return metrics
+            except Exception as e:
+                logger.warning(f"Error fetching insights for media {media_id}: {e}")
+
+        return metrics
         return data

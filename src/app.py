@@ -791,6 +791,10 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
         share_to_feed=stf
     )
 
+    media_id = result.get("id") if isinstance(result, dict) else None
+    if media_id:
+        repo.update_job_instagram_media_id(job_id, media_id)
+
     repo.mark_job_posted(job_id)
 
     if was_scheduled and old_scheduled_at:
@@ -799,7 +803,20 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     return {
         "status": "success",
         "message": "Reels publicado no Instagram com sucesso!",
-        "media_id": result.get("id")
+        "media_id": media_id
+    }
+
+
+@app.post("/api/v1/insights/sync")
+def trigger_insights_sync(request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    repo = get_repo()
+    from src.scheduler import sync_meta_insights
+    count = sync_meta_insights(repo)
+    return {
+        "status": "success",
+        "message": f"Métricas do Meta Instagram sincronizadas para {count} vídeo(s) com sucesso!",
+        "synced_count": count
     }
 
 

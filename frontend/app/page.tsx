@@ -57,6 +57,10 @@ interface LocalVideo {
   description?: string
   themes?: string
   duration_seconds?: number
+  has_face?: number
+  frame_paths?: string[]
+  usage_count?: number
+  last_used_at?: string
   updated_at?: string
 }
 
@@ -129,8 +133,37 @@ export default function DashboardPage() {
   const [visibleJobsCount, setVisibleJobsCount] = useState<number>(6)
   const [activeVideoPlayerId, setActiveVideoPlayerId] = useState<string | null>(null)
 
+  // RAG Insights state
+  const [syncingInsights, setSyncingInsights] = useState(false)
+  const [insightsMessage, setInsightsMessage] = useState('')
+
+  // Video Preview Modal state
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
+  const [previewModalTitle, setPreviewModalTitle] = useState('')
+
   const completedJobIdsRef = useRef<Set<string>>(new Set())
   const API_BASE = '/api/v1'
+
+  const handleSyncInsights = async () => {
+    setSyncingInsights(true)
+    setInsightsMessage('')
+    try {
+      const res = await fetch(`${API_BASE}/insights/sync`, {
+        method: 'POST',
+        headers: { credentials: 'include', 'X-API-Key': apiKey },
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setInsightsMessage(data.message || 'Métricas do Instagram Meta sincronizadas com sucesso!')
+      } else {
+        setInsightsMessage(data.detail || 'Falha ao sincronizar métricas.')
+      }
+    } catch {
+      setInsightsMessage('Erro de rede ao sincronizar métricas.')
+    } finally {
+      setSyncingInsights(false)
+    }
+  }
 
   useEffect(() => {
     const key = localStorage.getItem('reels_api_key')
@@ -1223,15 +1256,29 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {/* META INSTAGRAM CONNECT */}
+                {/* META INSTAGRAM CONNECT & RAG INSIGHTS */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <label className="text-xs font-semibold text-slate-700">Conexão Meta / Instagram Graph API</label>
+                  <label className="text-xs font-semibold text-slate-700">Conexão Meta & Loop RAG Insights</label>
                   <a
                     href="/api/v1/auth/instagram/login"
                     className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-sm transition-all"
                   >
                     <Sparkles className="w-4 h-4 text-[#0066FF]" /> Logar Direto com o Instagram Meta
                   </a>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncInsights}
+                    disabled={syncingInsights}
+                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 py-2.5 text-xs font-bold border border-slate-200 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-[#0066FF] ${syncingInsights ? 'animate-spin' : ''}`} />
+                    {syncingInsights ? 'Sincronizando Métricas Meta...' : 'Sincronizar Métricas do Meta Instagram'}
+                  </button>
+
+                  {insightsMessage && (
+                    <p className="text-[11px] text-blue-800 bg-blue-50 p-2.5 rounded-xl border border-blue-200">{insightsMessage}</p>
+                  )}
 
                   <div className="space-y-2 pt-2">
                     <input
@@ -1345,23 +1392,65 @@ export default function DashboardPage() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {videos.map((vid) => (
-                      <div key={vid.id || vid.path} className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex items-center justify-between gap-3 hover:bg-white hover:border-slate-300 transition-all">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0066FF] shrink-0">
-                            <Video className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{vid.filename}</p>
-                            <p className="text-[10px] text-slate-500 truncate">{vid.description || 'Indexado pela IA'}</p>
+                      <div key={vid.id || vid.path} className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col justify-between gap-3 hover:bg-white hover:border-slate-300 transition-all">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {/* THUMBNAIL / PREVIEW TRIGGER */}
+                          <button
+                            onClick={() => {
+                              setPreviewModalUrl(`${API_BASE}/videos/${vid.id}/stream`)
+                              setPreviewModalTitle(vid.filename)
+                            }}
+                            className="relative w-16 h-24 rounded-lg bg-slate-900 border border-slate-200 overflow-hidden shrink-0 group cursor-pointer flex items-center justify-center"
+                            title="Clique para assistir ao vídeo"
+                          >
+                            <img
+                              src={`${API_BASE}/videos/${vid.id}/thumbnail`}
+                              alt={vid.filename}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              onError={(e) => { e.currentTarget.style.display = 'none' }}
+                            />
+                            <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/20 flex items-center justify-center transition-all">
+                              <Play className="w-5 h-5 text-white fill-current shadow-md" />
+                            </div>
+                          </button>
+
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-xs font-bold text-slate-800 truncate" title={vid.filename}>{vid.filename}</p>
+                            <p className="text-[10px] text-slate-500 line-clamp-2">{vid.description || 'Indexado pela IA'}</p>
+
+                            <div className="flex items-center gap-1.5 pt-1">
+                              {(vid.usage_count || 0) === 0 ? (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Usado 0x (Prioridade)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  Usado {vid.usage_count}x
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteVideo(vid.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 transition-all shrink-0"
-                          title="Remover Vídeo"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] text-slate-600">
+                          <button
+                            onClick={() => {
+                              setPreviewModalUrl(`${API_BASE}/videos/${vid.id}/stream`)
+                              setPreviewModalTitle(vid.filename)
+                            }}
+                            className="text-[#0066FF] hover:underline font-bold flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" /> Ver Prévia
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteVideo(vid.id)}
+                            className="p-1 text-slate-600 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-all shrink-0"
+                            title="Remover Vídeo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1454,6 +1543,31 @@ export default function DashboardPage() {
                 <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                 <span>Cancelar Agendamento</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIDEO PREVIEW MODAL */}
+      {previewModalUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 truncate">{previewModalTitle || 'Prévia do Vídeo'}</h3>
+              <button
+                onClick={() => { setPreviewModalUrl(null); setPreviewModalTitle('') }}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold transition-all"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 bg-slate-950 aspect-[9/16] max-h-[520px] w-full flex items-center justify-center mx-auto">
+              <video
+                src={previewModalUrl}
+                controls
+                autoPlay
+                className="w-full h-full object-contain rounded-xl"
+              />
             </div>
           </div>
         </div>

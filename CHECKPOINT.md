@@ -2,7 +2,7 @@
 
 **Data da Atualização:** 25 de Julho de 2026  
 **Último Commit:** `6243d87` na branch `main` (`origin/main`)  
-**Status do Projeto:** Estável (51/51 testes passando no `pytest`)
+**Status do Projeto:** Estável (57/57 testes passando no `pytest`)
 
 ---
 
@@ -46,6 +46,22 @@ O **Clonify AI** (anteriormente chamado *Reels Cloner MVP*) é um SaaS de automa
    - **Zona Segura Forçada:** Sempre que um rosto/pessoa for detectado no vídeo (padrão em vídeos selfie/talking-head), a posição do texto é forçada para a zona inferior limpa (área do peito/torso, $y = 62\% \to 79\%$).
    - **Quebra de Linhas Responsiva:** Texto formatado com no máximo 26 caracteres por linha e restrição de largura a $78\%$ da tela para manter margens laterais limpas longe dos botões de ação do Instagram (curtir/comentar/compartilhar).
    - **Eliminação de Texto Central/Superior sobre Rostos:** Impede que o texto cubra olhos, boca, nariz ou testa (evitando o problema visto nas imagens de exemplo).
+
+6. **Prévias e Players de Vídeo em Modal Popup (Biblioteca + Clonador):**
+   - Exibição de thumbnails/capas reais em cada card da biblioteca de vídeos.
+   - Modal Popup com player `<video>` para assistir a qualquer vídeo local original ou Reels de referência.
+
+7. **Algoritmo Anti-Repetição da Biblioteca (`src/matcher.py` & `src/database.py`):**
+   - Rastreamento de `usage_count` e `last_used_at` na tabela `videos`.
+   - Bônus de +20% no ranking para vídeos nunca usados (`usage_count = 0`) e penalidade progressiva por frequência e recência.
+
+8. **Janela de Agendamento Segura (06:00 às 21:00 UTC-3) (`src/scheduler.py`):**
+   - Bloqueio automático de agendamentos de madrugada. Qualquer horário entre 21:01 e 05:59 é ajustado para 06:00 AM.
+
+9. **Engine RAG com Gemini Embeddings + Meta Graph API Insights (`src/ai_client.py` & `src/instagram_publisher.py`):**
+   - Captura do `instagram_media_id` ao publicar.
+   - Coleta de métricas (`views`, `likes`, `comments`, `shares`, `reach`) via Meta Graph API `/insights`.
+   - Injeção das métricas dos Top 5 Reels no prompt da IA (Gemini/OpenRouter) para aprendizado e geração contínua de alto engajamento.
 
 ---
 

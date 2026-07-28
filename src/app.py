@@ -1254,6 +1254,41 @@ async def instagram_callback(
         return RedirectResponse(url="/?error=oauth_exception")
 
 
+@app.get("/api/v1/videos/{video_id}/thumbnail")
+def get_video_thumbnail(video_id: str):
+    repo = get_repo()
+    video = repo.get_video_by_id(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado.")
+
+    frame_paths = video.get("frame_paths") or []
+    if isinstance(frame_paths, str):
+        try:
+            frame_paths = json.loads(frame_paths)
+        except Exception:
+            frame_paths = []
+
+    for fp in frame_paths:
+        if fp and os.path.exists(fp):
+            return FileResponse(fp, media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="Thumbnail não disponível.")
+
+
+@app.get("/api/v1/videos/{video_id}/stream")
+def stream_video(video_id: str):
+    repo = get_repo()
+    video = repo.get_video_by_id(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado.")
+
+    video_path = video.get("path")
+    if not video_path or not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Arquivo de vídeo não encontrado no disco.")
+
+    return FileResponse(video_path, media_type="video/mp4")
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "model": settings.gemini_model}

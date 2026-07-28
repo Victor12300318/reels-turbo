@@ -153,3 +153,36 @@ def test_job_schedule_update_and_cancel():
     cancelled_job = repo.get_job(job["id"])
     assert cancelled_job["scheduled_at"] is None
     assert cancelled_job["status"] == "completed"
+
+
+def test_video_thumbnail_and_stream_endpoints(tmp_path):
+    import uuid
+    from src.app import get_repo
+    repo = get_repo()
+    usr_key = f"usr_key_vmedia_{uuid.uuid4()}"
+    user = repo.create_user(email=f"vmedia_{uuid.uuid4()}@test.com", password_hash="hash", api_key=usr_key)
+
+    frame_file = tmp_path / "frame.jpg"
+    frame_file.write_bytes(b"fake_jpg_data")
+    video_file = tmp_path / "test.mp4"
+    video_file.write_bytes(b"fake_mp4_data")
+
+    repo.upsert({
+        "path": str(video_file),
+        "filename": "test.mp4",
+        "description": "Test",
+        "themes": "test",
+        "orientation": "portrait",
+        "duration_seconds": 5.0,
+        "has_face": 0,
+        "frame_paths": [str(frame_file)],
+    }, user_id=user["id"])
+
+    vid = repo.get_by_path(str(video_file))
+    assert vid is not None
+
+    res_thumb = client.get(f"/api/v1/videos/{vid['id']}/thumbnail")
+    assert res_thumb.status_code == 200
+
+    res_stream = client.get(f"/api/v1/videos/{vid['id']}/stream")
+    assert res_stream.status_code == 200

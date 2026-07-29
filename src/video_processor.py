@@ -47,31 +47,33 @@ class VideoProcessor:
 
         try:
             current_duration = ffmpeg_utils.get_duration(local_input_path)
+            crop_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
 
             if current_duration < target_duration and current_duration > 0:
-                loops = math.ceil(target_duration / current_duration)
-                concat_list_path = str(Path(output_path).parent / f"concat_list_{os.getpid()}.txt")
-                abs_video_path = str(Path(local_input_path).resolve())
-                with open(concat_list_path, "w", encoding="utf-8") as f:
-                    for _ in range(loops):
-                        f.write(f"file '{abs_video_path.replace(chr(39), chr(39)+chr(39))}'\n")
+                # Use -stream_loop to seamlessly loop short video to target_duration with clean libx264 encoding
                 ffmpeg_utils.run_ffmpeg([
                     "-y",
-                    "-f", "concat",
-                    "-safe", "0",
-                    "-i", concat_list_path,
-                    "-c", "copy",
+                    "-stream_loop", "-1",
+                    "-i", local_input_path,
+                    "-vf", crop_filter,
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-pix_fmt", "yuv420p",
                     "-an",
                     "-t", str(target_duration),
                     output_path,
                 ])
-                if os.path.exists(concat_list_path):
-                    os.remove(concat_list_path)
             else:
+                # Trim longer video to target_duration with clean 1080x1920 crop and libx264 encoding
                 ffmpeg_utils.run_ffmpeg([
                     "-y",
                     "-i", local_input_path,
-                    "-c", "copy",
+                    "-vf", crop_filter,
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-pix_fmt", "yuv420p",
                     "-an",
                     "-t", str(target_duration),
                     output_path,
@@ -131,10 +133,12 @@ def _sanitize_text_for_ffmpeg(text: str) -> str:
     como emojis e símbolos especiais exóticos, evitando quadrados brancos [] na tela.
     """
     # Regex que remove emojis e caracteres fora do escopo padrão de texto latino + acentuação portuguesa
-    # Mantém letras, números, acentuação padrão, pontuação comum e quebra de linhas.
     allowed_pattern = re.compile(r'[^\w\s\d.,!?;:()\'\"\-\+\*\/\\=áàâãéèêíóòôõúüçÁÀÂÃÉÈÊÍÓÒÔÕÚÜÇ\n]', re.UNICODE)
     sanitized = allowed_pattern.sub('', text)
-    # Remove espaços duplos extras
+    # Capitalize first letter of text if lowercase
+    sanitized = sanitized.strip()
+    if sanitized and len(sanitized) > 1 and sanitized[0].islower():
+        sanitized = sanitized[0].upper() + sanitized[1:]
     return re.sub(r' +', ' ', sanitized)
 
 

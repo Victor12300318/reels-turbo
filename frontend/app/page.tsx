@@ -602,18 +602,40 @@ export default function DashboardPage() {
     }
   }
 
+  const handleArchiveJob = async (jobId: string) => {
+    if (!confirm('Deseja realmente arquivar este vídeo? Ele será removido do seu feed e dos agendados.')) return
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: { 'X-API-Key': apiKey }
+      })
+      if (res.ok) {
+        setJobs(prev => prev.filter(j => j.id !== jobId))
+        if (editingJob?.id === jobId) {
+          setEditingJob(null)
+        }
+        await fetchJobs(apiKey)
+      } else {
+        const data = await res.json()
+        alert(`Erro ao arquivar: ${data.detail || 'Falha na requisição'}`)
+      }
+    } catch (e: any) {
+      alert(`Erro de conexão: ${e.message}`)
+    }
+  }
+
   const handleCancelSchedule = async () => {
     if (!editingJob) return
-    if (!confirm('Deseja realmente cancelar este agendamento? O vídeo retornará ao status de Pronto.')) return
+    if (!confirm('Deseja realmente arquivar e cancelar este agendamento? O vídeo será removido dos agendados.')) return
     setSavingSchedule(true)
     try {
-      const res = await fetch(`${API_BASE}/jobs/${editingJob.id}/schedule`, {
+      const res = await fetch(`${API_BASE}/jobs/${editingJob.id}`, {
         method: 'DELETE',
         headers: { 'X-API-Key': apiKey }
       })
       const data = await res.json()
       if (res.ok) {
-        alert('Agendamento cancelado com sucesso!')
+        alert('Agendamento cancelado e vídeo arquivado com sucesso!')
         setEditingJob(null)
         await fetchJobs(apiKey)
       } else {
@@ -1001,6 +1023,13 @@ export default function DashboardPage() {
                                     <Download className="w-4 h-4 text-slate-700" />
                                   </a>
                                 )}
+                                <button
+                                  onClick={() => handleArchiveJob(job.id)}
+                                  className="inline-flex items-center justify-center p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-all shrink-0"
+                                  title="Arquivar / Remover do Feed"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             )}
                           </div>

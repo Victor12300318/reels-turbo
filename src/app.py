@@ -323,9 +323,44 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         repo.update_job(job_id, status="failed", error=error_msg)
 
 
+import queue
+import threading
+
+job_processing_queue = queue.Queue()
+queue_worker_lock = threading.Lock()
+is_worker_running = False
+
+def process_job_queue_worker():
+    global is_worker_running
+    while True:
+        try:
+            task_item = job_processing_queue.get(timeout=3.0)
+            job_id, user_id, url, output_dir, webhook_url = task_item
+            try:
+                logging.info(f"[Queue Worker] Processing job {job_id} ({url})...")
+                background_job_processor(job_id, user_id, url, output_dir, webhook_url)
+            except Exception as e:
+                logging.error(f"[Queue Worker] Error processing job {job_id}: {e}")
+            finally:
+                job_processing_queue.task_done()
+        except queue.Empty:
+            with queue_worker_lock:
+                if job_processing_queue.empty():
+                    is_worker_running = False
+                    break
+
+def enqueue_job_task(job_id: str, user_id: str, url: str, output_dir: str | None = None, webhook_url: str | None = None):
+    global is_worker_running
+    job_processing_queue.put((job_id, user_id, url, output_dir, webhook_url))
+    with queue_worker_lock:
+        if not is_worker_running:
+            is_worker_running = True
+            t = threading.Thread(target=process_job_queue_worker, daemon=True)
+            t.start()
+
 def background_clone_and_send(url: str, output_dir: str | None = None, webhook_url: str | None = None, job_id: str | None = None, user_id: str | None = None) -> None:
     if job_id and user_id:
-        background_job_processor(job_id, user_id, url, output_dir, webhook_url)
+        enqueue_job_task(job_id, user_id, url, output_dir, webhook_url)
     else:
         try:
             res = clone_reels_pipeline(url, output_dir=output_dir, user_id=user_id)
@@ -724,6 +759,29 @@ async def update_job_schedule_endpoint(job_id: str, request: Request, x_api_key:
         "message": "Horário de agendamento atualizado com sucesso!",
         "job_id": job_id,
         "scheduled_at": str(scheduled_at)
+    }
+
+
+@app.delete("/api/v1/jobs/{job_id}")
+def archive_job_endpoint(job_id: str, request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    repo = get_repo()
+    job = repo.get_job(job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+
+    old_scheduled_at = job.get("scheduled_at")
+    success = repo.archive_job(job_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Falha ao arquivar o vídeo.")
+
+    if old_scheduled_at:
+        repo.shift_schedule_queue_after_posting(user["id"], old_scheduled_at)
+
+    return {
+        "status": "success",
+        "message": "Vídeo arquivado e removido do feed com sucesso.",
+        "job_id": job_id
     }
 
 

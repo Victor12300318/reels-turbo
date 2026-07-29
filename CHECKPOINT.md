@@ -63,6 +63,11 @@ O **Clonify AI** (anteriormente chamado *Reels Cloner MVP*) é um SaaS de automa
    - Coleta de métricas (`views`, `likes`, `comments`, `shares`, `reach`) via Meta Graph API `/insights`.
    - Injeção das métricas dos Top 5 Reels no prompt da IA (Gemini/OpenRouter) para aprendizado e geração contínua de alto engajamento.
 
+10. **Modo Fila Sequencial, Crop 9:16 Re-encoded & Arquivamento de Jobs (`src/app.py` & `src/video_processor.py`):**
+    - **Modo Fila (1 por vez):** Processamento sequencial FIFO (`job_processing_queue`) de clonagem para evitar sobrecarga de CPU/RAM, glitches visuais e falhas ao enviar múltiplos Reels.
+    - **Renderização Limpa 1080x1920 9:16:** Recodificação libx264 obrigatória em `adjust_duration` com crop `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`, eliminando barras pretas e artefatos de vídeo (glitches).
+    - **Arquivamento e Remoção do Feed:** Suporte a `status = 'archived'` (`DELETE /api/v1/jobs/{job_id}`) com remoção imediata da tela do usuário ao cancelar ou arquivar.
+
 ---
 
 ## 📂 Arquivos Chave da Aplicação

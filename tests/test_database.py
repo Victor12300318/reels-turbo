@@ -72,6 +72,12 @@ def test_user_and_job_operations(repo):
     assert len(user_jobs) == 1
     assert user_jobs[0]["id"] == job["id"]
 
+    # Test job archiving
+    repo.archive_job(job["id"])
+    assert len(repo.get_jobs_by_user(user["id"])) == 0
+    archived_job = repo.get_job(job["id"])
+    assert archived_job["status"] == "archived"
+
 
 def test_multi_tenant_video_isolation(repo):
     user1 = repo.create_user(email="u1@test.com", password_hash="hash", api_key="key1")

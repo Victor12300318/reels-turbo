@@ -668,6 +668,20 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def archive_job(self, job_id: str) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            ph = self._ph(1)
+            with conn:
+                cursor = conn.execute(
+                    f"UPDATE jobs SET status = 'archived', scheduled_at = NULL, updated_at = {ph} WHERE id = {ph}",
+                    (now, job_id)
+                )
+                return cursor.rowcount > 0 if hasattr(cursor, 'rowcount') else True
+        finally:
+            conn.close()
+
     # --- SYSTEM SETTINGS OPERATIONS ---
     def get_system_setting(self, key: str, default: str = "") -> str:
         ph = self._ph(1)
@@ -802,7 +816,7 @@ class VideoRepository:
         ph = self._ph(1)
         conn = self._connect()
         try:
-            cursor = conn.execute(f"SELECT * FROM jobs WHERE user_id = {ph} ORDER BY created_at DESC", (user_id,))
+            cursor = conn.execute(f"SELECT * FROM jobs WHERE user_id = {ph} AND status != 'archived' ORDER BY created_at DESC", (user_id,))
             rows = cursor.fetchall()
             return [dict(r) for r in rows]
         finally:

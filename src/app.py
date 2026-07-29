@@ -1239,25 +1239,29 @@ async def handle_meta_webhook(request: Request):
 
 
 @app.get("/api/v1/auth/instagram/login")
-def instagram_login(redirect_uri: str = "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback", mode: str = "instagram"):
-    client_id = settings.meta_app_id or "913982567729553"
+def instagram_login(redirect_uri: str | None = None, mode: str | None = None):
+    cb_uri = redirect_uri or settings.instagram_redirect_uri or "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback"
 
-    if mode == "facebook":
+    ig_client_id = settings.instagram_client_id or os.getenv("INSTAGRAM_CLIENT_ID", "")
+    meta_app_id = settings.meta_app_id or os.getenv("META_APP_ID", "")
+
+    if mode == "facebook" or (not ig_client_id and meta_app_id):
+        client_id = meta_app_id
         meta_url = (
             f"https://www.facebook.com/v19.0/dialog/oauth?"
             f"client_id={client_id}&"
-            f"redirect_uri={redirect_uri}&"
+            f"redirect_uri={cb_uri}&"
             f"scope=instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement&"
             f"response_type=code"
         )
     else:
-        # Direct Instagram Business OAuth
+        client_id = ig_client_id or meta_app_id
         scopes = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights"
         meta_url = (
             f"https://www.instagram.com/oauth/authorize?"
             f"force_reauth=true&"
             f"client_id={client_id}&"
-            f"redirect_uri={redirect_uri}&"
+            f"redirect_uri={cb_uri}&"
             f"response_type=code&"
             f"scope={scopes}"
         )
@@ -1269,65 +1273,70 @@ def instagram_login(redirect_uri: str = "https://reelsturbo.hdstec.com.br/api/v1
 async def instagram_callback(
     code: str = "",
     error: str = "",
-    redirect_uri: str = "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback"
+    redirect_uri: str | None = None
 ):
     if error or not code:
         logging.warning(f"Instagram login callback received error or empty code: error={error}")
         return RedirectResponse(url="/?error=instagram_login_failed")
 
-    client_id = settings.meta_app_id or "913982567729553"
-    client_secret = settings.meta_app_secret
+    cb_uri = redirect_uri or settings.instagram_redirect_uri or "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback"
+    ig_client_id = settings.instagram_client_id or os.getenv("INSTAGRAM_CLIENT_ID", "")
+    ig_client_secret = settings.instagram_client_secret or os.getenv("INSTAGRAM_CLIENT_SECRET", "")
+    meta_app_id = settings.meta_app_id or os.getenv("META_APP_ID", "")
+    meta_app_secret = settings.meta_app_secret or os.getenv("META_APP_SECRET", "")
 
     try:
-        logging.info(f"Exchanging OAuth code with direct Instagram API (redirect_uri={redirect_uri})...")
-        ig_token_url = "https://api.instagram.com/oauth/access_token"
-        res = httpx.post(ig_token_url, data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
-            "code": code
-        }, timeout=30.0)
+        logging.info(f"Exchanging OAuth code (redirect_uri={cb_uri})...")
+        short_token = None
+        ig_account_id = ""
+        long_token = None
 
-        token_data = res.json()
-        short_token = token_data.get("access_token")
-        ig_account_id = str(token_data.get("user_id") or "")
+        if ig_client_id and ig_client_secret:
+            ig_token_url = "https://api.instagram.com/oauth/access_token"
+            res = httpx.post(ig_token_url, data={
+                "client_id": ig_client_id,
+                "client_secret": ig_client_secret,
+                "grant_type": "authorization_code",
+                "redirect_uri": cb_uri,
+                "code": code
+            }, timeout=30.0)
 
-        long_token = short_token
+            token_data = res.json()
+            short_token = token_data.get("access_token")
+            ig_account_id = str(token_data.get("user_id") or "")
+            long_token = short_token
 
-        # Exchange short_token for long_lived_token if available
-        if short_token and client_secret:
-            try:
-                long_res = httpx.get("https://graph.instagram.com/access_token", params={
-                    "grant_type": "ig_exchange_token",
-                    "client_secret": client_secret,
-                    "access_token": short_token
-                }, timeout=30.0)
-                long_data = long_res.json()
-                if "access_token" in long_data:
-                    long_token = long_data["access_token"]
-            except Exception as e_long:
-                logging.warning(f"Could not exchange short-lived token for long-lived token: {e_long}")
+            if short_token:
+                try:
+                    long_res = httpx.get("https://graph.instagram.com/access_token", params={
+                        "grant_type": "ig_exchange_token",
+                        "client_secret": ig_client_secret,
+                        "access_token": short_token
+                    }, timeout=30.0)
+                    long_data = long_res.json()
+                    if "access_token" in long_data:
+                        long_token = long_data["access_token"]
+                except Exception as e_long:
+                    logging.warning(f"Could not exchange short-lived token for long-lived token: {e_long}")
 
-        # Fallback to Facebook Graph API exchange if direct Instagram returned no token
-        if not short_token:
-            logging.info("Direct Instagram OAuth token exchange returned no token, trying Facebook Graph API fallback...")
+        if not short_token and meta_app_id and meta_app_secret:
+            logging.info("Trying Facebook Graph API exchange...")
             fb_token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
             fb_res = httpx.get(fb_token_url, params={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "redirect_uri": redirect_uri,
+                "client_id": meta_app_id,
+                "client_secret": meta_app_secret,
+                "redirect_uri": cb_uri,
                 "code": code
             }, timeout=30.0)
             fb_data = fb_res.json()
             short_token = fb_data.get("access_token")
             long_token = short_token
 
-            if short_token and client_secret:
+            if short_token:
                 res_long = httpx.get("https://graph.facebook.com/v19.0/oauth/access_token", params={
                     "grant_type": "fb_exchange_token",
-                    "client_id": client_id,
-                    "client_secret": client_secret,
+                    "client_id": meta_app_id,
+                    "client_secret": meta_app_secret,
                     "fb_exchange_token": short_token
                 }, timeout=30.0)
                 long_data = res_long.json()
@@ -1343,7 +1352,7 @@ async def instagram_callback(
                         break
 
         if not long_token:
-            logging.error(f"Failed to obtain token from Instagram/Meta: {token_data}")
+            logging.error("Failed to obtain token from Instagram/Meta OAuth exchange.")
             return RedirectResponse(url="/?error=invalid_token")
 
         repo = get_repo()

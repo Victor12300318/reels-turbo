@@ -37,7 +37,7 @@ class Settings:
     s3_ssl: bool = True
     s3_region: str = "us-east-1"
     s3_public_custom_domain: str = "https://crm-minio.xjbony.easypanel.host/reels-turbo"
-    meta_app_id: str = "1337818285188918"
+    meta_app_id: str = "913982567729553"
     meta_app_secret: str = ""
     instagram_account_id: str = ""
     instagram_access_token: str = ""
@@ -82,7 +82,7 @@ def get_settings() -> Settings:
         s3_ssl=os.getenv("S3_SSL", "true").lower() in ("true", "1", "yes"),
         s3_region=os.getenv("S3_REGION", "us-east-1"),
         s3_public_custom_domain=os.getenv("S3_PUBLIC_CUSTOM_DOMAIN", "https://crm-minio.xjbony.easypanel.host/reels-turbo"),
-        meta_app_id=os.getenv("META_APP_ID", "1337818285188918"),
+        meta_app_id=os.getenv("META_APP_ID", "913982567729553"),
         meta_app_secret=os.getenv("META_APP_SECRET", ""),
         instagram_account_id=os.getenv("INSTAGRAM_ACCOUNT_ID", ""),
         instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),

@@ -68,6 +68,10 @@ O **Clonify AI** (anteriormente chamado *Reels Cloner MVP*) é um SaaS de automa
     - **Renderização Limpa 1080x1920 9:16:** Recodificação libx264 obrigatória em `adjust_duration` com crop `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`, eliminando barras pretas e artefatos de vídeo (glitches).
     - **Arquivamento e Remoção do Feed:** Suporte a `status = 'archived'` (`DELETE /api/v1/jobs/{job_id}`) com remoção imediata da tela do usuário ao cancelar ou arquivar.
 
+11. **Login Direto com o Instagram Business OAuth (`src/app.py` & `src/config.py`):**
+    - **Direto pelo Instagram:** Redirecionamento OAuth alterado para `https://www.instagram.com/oauth/authorize` com escopos de negócios `instagram_business_*`.
+    - **Client ID & Callback:** Atualizados para `913982567729553` e `redirect_uri=https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback` (removendo URLs antigas do ngrok).
+
 ---
 
 ## 📂 Arquivos Chave da Aplicação

@@ -11,6 +11,7 @@ from src.analyzer import VideoAnalyzer
 from src.indexer import index_videos_folder
 from src.downloader import download_reels
 from src.matcher import Matcher
+from src.text_style import font_path_for, merge_user_style, normalize_text_style
 from src.video_processor import VideoProcessor
 
 
@@ -44,11 +45,25 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
     db_location = settings.database_url if settings.database_url else str(Path(settings.data_dir) / "videos.db")
     repo = VideoRepository(db_location)
     repo.ensure_schema()
-    candidates = repo.get_all(user_id=user_id)
-    if not candidates and user_id:
-        candidates = repo.get_all()
-    if not candidates:
+    raw_candidates = repo.get_all(user_id=user_id) if user_id else repo.get_all()
+    if not raw_candidates and user_id:
+        raw_candidates = repo.get_all()
+    if not raw_candidates:
         raise ValueError("No local videos indexed. Upload local videos first.")
+
+    eligible_candidates = [
+        video for video in raw_candidates
+        if video.get("description")
+        and video.get("frame_paths")
+        and Path(video.get("path", "")).exists()
+    ]
+    if not eligible_candidates:
+        raise ValueError("No eligible local videos indexed. Upload local videos first.")
+
+    candidates, _ = repo.get_rotation_candidates(user_id, eligible_candidates)
+
+    user = repo.get_user_by_id(user_id) if user_id else None
+    user_text_style = normalize_text_style((user or {}).get("text_style"))
 
     client = get_ai_client(repo)
     analyzer = VideoAnalyzer(client)
@@ -90,6 +105,8 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
         on_screen_text = analyzer.generate_headline_fallback(ref_frames, ref_description.get("description", ""))
 
     text_style = analyzer.analyze_text_style(ref_frames)
+    final_text_style = merge_user_style(user_text_style, text_style)
+    final_font_path = font_path_for(user_text_style["font"])
 
     if progress_callback:
         progress_callback(60, "Buscando melhor vídeo correspondente na biblioteca...")
@@ -102,11 +119,6 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
 
     winner = matcher.select_best_video(ref_frames, ranked[:3])
     logging.info(f"Selected local video: {winner['path']}")
-    if winner.get("id"):
-        try:
-            repo.increment_video_usage(winner["id"])
-        except Exception as e_usage:
-            logging.warning(f"Could not increment video usage count: {e_usage}")
 
     if progress_callback:
         progress_callback(80, "Renderizando vídeo final com áudio e overlay...")
@@ -146,8 +158,15 @@ def clone_reels_pipeline(url: str, output_dir: str | None = None, user_id: str |
         on_screen_text or "",
         face_position,
         str(output_path),
-        text_style=text_style,
+        text_style=final_text_style,
+        font_path=final_font_path,
     )
+    if winner.get("id"):
+        try:
+            repo.mark_video_used(user_id, winner["id"])
+        except Exception as e_usage:
+            logging.warning(f"Could not record video usage in cycle: {e_usage}")
+
     logging.info(f"Done: {final_path}")
     return final_path, original_s3_url
 

@@ -195,7 +195,9 @@ def _build_drawtext_filter(
     font_size = _responsive_font_size(lines, video_width, video_height, base_ratio)
 
     color = _normalize_color(style.get("font_color", "white"))
-    has_box = style.get("has_background_box", False)
+    background_mode = style.get("background_mode")
+    if background_mode not in ("white", "black"):
+        background_mode = "black" if style.get("has_background_box") else "none"
 
     vertical = style.get("position_vertical", "bottom")
     horizontal = style.get("position_horizontal", "center")
@@ -236,7 +238,9 @@ def _build_drawtext_filter(
     else:
         x_expr = "(w-text_w)/2"
 
-    if has_box:
+    if background_mode == "white":
+        extras = "box=1:boxcolor=white@0.65:boxborderw=10"
+    elif background_mode == "black":
         extras = "box=1:boxcolor=black@0.65:boxborderw=10"
     else:
         border_w = max(4, int(font_size * 0.11))
@@ -307,6 +311,10 @@ def _responsive_font_size(
 
 
 def _normalize_color(color: str) -> str:
+    candidate = str(color or "white").strip()
+    if candidate.startswith("#") and len(candidate) in (4, 7):
+        return candidate
+
     mapping = {
         "branco": "white",
         "preto": "black",
@@ -318,7 +326,7 @@ def _normalize_color(color: str) -> str:
         "magenta": "magenta",
         "laranja": "orange",
     }
-    normalized = mapping.get(color.lower().strip(), color.lower().strip())
+    normalized = mapping.get(candidate.lower().strip(), candidate.lower().strip())
     allowed = {"white", "black", "yellow", "red", "green", "blue", "cyan", "magenta", "orange"}
     return normalized if normalized in allowed else "white"
 

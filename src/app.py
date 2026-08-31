@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import base64
@@ -15,6 +16,7 @@ from src.database import VideoRepository
 from src.ai_client import get_ai_client
 from src.analyzer import VideoAnalyzer
 from src.indexer import index_videos_folder
+from src.text_style import normalize_text_style, text_style_options
 
 import asyncio
 
@@ -245,23 +247,26 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
 
         if ig_account_id and ig_token and public_url.startswith("http"):
             if interval_hours == 0:
-                # Immediate posting
-                try:
-                    from src.instagram_publisher import InstagramPublisher
-                    logging.info(f"[Job {job_id}] Auto-posting Reels immediately to Instagram account {ig_account_id}...")
-                    publisher = InstagramPublisher()
-                    publisher.publish_reel(
-                        video_url=public_url,
-                        caption=user_caption,
-                        instagram_account_id=ig_account_id,
-                        access_token=ig_token,
-                        share_to_feed=stf
-                    )
-                    repo.mark_job_posted(job_id)
-                    if webhook_url:
-                        send_video_to_n8n(final_video_path, url, webhook_url)
-                except Exception as ig_err:
-                    logging.error(f"[Job {job_id}] Immediate Instagram auto-post failed: {ig_err}")
+                if not repo.claim_job_for_publishing(job_id):
+                    logging.warning(f"[Job {job_id}] Publishing skipped because job was already claimed.")
+                else:
+                    try:
+                        from src.instagram_publisher import InstagramPublisher
+                        logging.info(f"[Job {job_id}] Auto-posting Reels immediately to Instagram account {ig_account_id}...")
+                        publisher = InstagramPublisher()
+                        publisher.publish_reel(
+                            video_url=public_url,
+                            caption=user_caption,
+                            instagram_account_id=ig_account_id,
+                            access_token=ig_token,
+                            share_to_feed=stf
+                        )
+                        repo.mark_job_posted(job_id)
+                        if webhook_url:
+                            send_video_to_n8n(final_video_path, url, webhook_url)
+                    except Exception as ig_err:
+                        repo.mark_job_publish_uncertain(job_id, str(ig_err))
+                        logging.error(f"[Job {job_id}] Immediate Instagram auto-post result is uncertain: {ig_err}")
             else:
                 # Automatic Rolling Queue Scheduling
                 from datetime import datetime, timedelta, timezone
@@ -298,22 +303,26 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
                 logging.info(f"[Job {job_id}] Auto-scheduled in queue for {sched_iso} (interval: {interval_hours}h)")
 
                 if next_slot <= now_utc:
-                    try:
-                        from src.instagram_publisher import InstagramPublisher
-                        logging.info(f"[Job {job_id}] First in queue - publishing now to Instagram...")
-                        publisher = InstagramPublisher()
-                        publisher.publish_reel(
-                            video_url=public_url,
-                            caption=user_caption,
-                            instagram_account_id=ig_account_id,
-                            access_token=ig_token,
-                            share_to_feed=stf
-                        )
-                        repo.mark_job_posted(job_id)
-                        if webhook_url:
-                            send_video_to_n8n(final_video_path, url, webhook_url)
-                    except Exception as ig_err:
-                        logging.error(f"[Job {job_id}] Auto-post for due slot failed: {ig_err}")
+                    if not repo.claim_job_for_publishing(job_id):
+                        logging.warning(f"[Job {job_id}] Due slot publishing skipped because job was already claimed.")
+                    else:
+                        try:
+                            from src.instagram_publisher import InstagramPublisher
+                            logging.info(f"[Job {job_id}] First in queue - publishing now to Instagram...")
+                            publisher = InstagramPublisher()
+                            publisher.publish_reel(
+                                video_url=public_url,
+                                caption=user_caption,
+                                instagram_account_id=ig_account_id,
+                                access_token=ig_token,
+                                share_to_feed=stf
+                            )
+                            repo.mark_job_posted(job_id)
+                            if webhook_url:
+                                send_video_to_n8n(final_video_path, url, webhook_url)
+                        except Exception as ig_err:
+                            repo.mark_job_publish_uncertain(job_id, str(ig_err))
+                            logging.error(f"[Job {job_id}] Due slot auto-post result is uncertain: {ig_err}")
 
         if webhook_url:
             send_video_to_n8n(final_video_path, url, webhook_url)
@@ -457,7 +466,9 @@ def get_me(request: Request, x_api_key: str | None = Header(None)):
         "instagram_access_token": user.get("instagram_access_token") or "",
         "default_caption_suffix": user.get("default_caption_suffix") or "",
         "share_to_feed": user.get("share_to_feed", 0),
-        "default_post_interval_hours": user.get("default_post_interval_hours", 3)
+        "default_post_interval_hours": user.get("default_post_interval_hours", 3),
+        "text_style": normalize_text_style(user.get("text_style")),
+        "text_style_options": text_style_options()
     }
 
 
@@ -468,16 +479,27 @@ async def update_user_settings_endpoint(request: Request, x_api_key: str | None 
     default_caption_suffix = body.get("default_caption_suffix", "").strip()
     share_to_feed = 1 if body.get("share_to_feed") in (True, 1, "true", "1") else 0
     default_post_interval_hours = int(body.get("default_post_interval_hours", 3))
+    if body.get("text_style") is None:
+        text_style = normalize_text_style(user.get("text_style"))
+    else:
+        text_style = normalize_text_style(body.get("text_style"))
 
     repo = get_repo()
-    repo.update_user_settings(user["id"], default_caption_suffix, share_to_feed, default_post_interval_hours)
+    repo.update_user_settings(
+        user["id"],
+        default_caption_suffix,
+        share_to_feed,
+        default_post_interval_hours,
+        json.dumps(text_style, ensure_ascii=False)
+    )
 
     return {
         "status": "success",
         "message": "Configurações salvas com sucesso!",
         "default_caption_suffix": default_caption_suffix,
         "share_to_feed": share_to_feed,
-        "default_post_interval_hours": default_post_interval_hours
+        "default_post_interval_hours": default_post_interval_hours,
+        "text_style": text_style
     }
 
 
@@ -821,14 +843,11 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if not job or job["user_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Job não encontrado.")
 
-    if job.get("posted_at"):
-        raise HTTPException(status_code=400, detail="Este vídeo já foi publicado no Instagram.")
+    if job.get("posted_at") or job.get("publish_state") in ("posted", "publishing", "uncertain"):
+        raise HTTPException(status_code=409, detail="Este job já está em publicação ou já foi publicado.")
 
     if job["status"] not in ("completed", "scheduled") or not job.get("output_path"):
         raise HTTPException(status_code=400, detail="Vídeo ainda não foi renderizado ou falhou.")
-
-    old_scheduled_at = job.get("scheduled_at")
-    was_scheduled = job.get("status") == "scheduled" or bool(old_scheduled_at)
 
     ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
     ig_token = user.get("instagram_access_token") or settings.instagram_access_token
@@ -836,18 +855,28 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if not ig_account_id or not ig_token:
         raise HTTPException(status_code=400, detail="Conecte sua conta do Instagram no painel antes de publicar.")
 
+    if not repo.claim_job_for_publishing(job_id):
+        raise HTTPException(status_code=409, detail="Este job já está em publicação ou já foi publicado.")
+
+    old_scheduled_at = job.get("scheduled_at")
+    was_scheduled = job.get("status") == "scheduled" or bool(old_scheduled_at)
+
     from src.instagram_publisher import InstagramPublisher
     publisher = InstagramPublisher()
     final_caption = caption or job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
     stf = bool(share_to_feed if share_to_feed is not None else job.get("share_to_feed", user.get("share_to_feed", 0)))
 
-    result = publisher.publish_reel(
-        video_url=job["output_path"],
-        caption=final_caption,
-        instagram_account_id=ig_account_id,
-        access_token=ig_token,
-        share_to_feed=stf
-    )
+    try:
+        result = publisher.publish_reel(
+            video_url=job["output_path"],
+            caption=final_caption,
+            instagram_account_id=ig_account_id,
+            access_token=ig_token,
+            share_to_feed=stf
+        )
+    except Exception as ig_err:
+        repo.mark_job_publish_uncertain(job_id, str(ig_err))
+        raise HTTPException(status_code=502, detail="Resultado da publicação incerto. Revise o job antes de tentar novamente.")
 
     media_id = result.get("id") if isinstance(result, dict) else None
     if media_id:
@@ -862,6 +891,38 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
         "status": "success",
         "message": "Reels publicado no Instagram com sucesso!",
         "media_id": media_id
+    }
+
+
+@app.post("/api/v1/jobs/{job_id}/publish/resolve")
+async def resolve_publish_uncertain(job_id: str, request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    body = await request.json()
+    action = body.get("action")
+
+    if action not in ("confirm", "discard"):
+        raise HTTPException(status_code=400, detail="A ação deve ser confirm ou discard.")
+
+    repo = get_repo()
+    job = repo.get_job(job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+
+    if job.get("publish_state") != "uncertain":
+        raise HTTPException(status_code=409, detail="Este job não está em estado de publicação incerta.")
+
+    old_scheduled_at = job.get("scheduled_at")
+    success = repo.resolve_job_publish_uncertain(job_id, action == "confirm")
+    if not success:
+        raise HTTPException(status_code=409, detail="Não foi possível resolver a publicação incerta.")
+
+    if old_scheduled_at:
+        repo.shift_schedule_queue_after_posting(user["id"], old_scheduled_at)
+
+    return {
+        "status": "success",
+        "message": "Publicação confirmada como postada." if action == "confirm" else "Tentativa de publicação descartada.",
+        "job_id": job_id
     }
 
 
@@ -1171,6 +1232,9 @@ def list_videos(request: Request, x_api_key: str | None = Header(None)):
     user = authenticate_request(request, x_api_key)
     repo = get_repo()
     videos = repo.get_all(user_id=user["id"])
+    used_ids = repo.get_used_video_ids(user["id"])
+    for video in videos:
+        video["used_in_cycle"] = int(video.get("id", 0)) in used_ids
     return {"videos": videos}
 
 

@@ -54,6 +54,7 @@ class VideoRepository:
                         default_caption_suffix TEXT,
                         share_to_feed INTEGER DEFAULT 0,
                         default_post_interval_hours INTEGER DEFAULT 3,
+                        text_style TEXT,
                         created_at TEXT NOT NULL
                     )
                 """)
@@ -65,6 +66,7 @@ class VideoRepository:
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_caption_suffix TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_post_interval_hours INTEGER DEFAULT 3")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS text_style TEXT")
 
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS videos (
@@ -88,6 +90,15 @@ class VideoRepository:
                 conn.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS last_used_at TEXT")
 
                 conn.execute("""
+                    CREATE TABLE IF NOT EXISTS video_cycle_usage (
+                        user_id TEXT NOT NULL,
+                        video_id INTEGER NOT NULL,
+                        used_at TEXT NOT NULL,
+                        PRIMARY KEY (user_id, video_id)
+                    )
+                """)
+
+                conn.execute("""
                     CREATE TABLE IF NOT EXISTS jobs (
                         id TEXT PRIMARY KEY,
                         user_id TEXT,
@@ -103,6 +114,8 @@ class VideoRepository:
                         original_s3_url TEXT,
                         instagram_media_id TEXT,
                         embedding TEXT,
+                        publish_state TEXT DEFAULT 'unpublished',
+                        publish_error TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
@@ -115,6 +128,9 @@ class VideoRepository:
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_s3_url TEXT")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS instagram_media_id TEXT")
                 conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS embedding TEXT")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS publish_state TEXT DEFAULT 'unpublished'")
+                conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS publish_error TEXT")
+                conn.execute("UPDATE jobs SET publish_state = 'posted' WHERE posted_at IS NOT NULL AND (publish_state IS NULL OR publish_state = 'unpublished')")
 
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS media_insights (
@@ -161,6 +177,7 @@ class VideoRepository:
                             default_caption_suffix TEXT,
                             share_to_feed INTEGER DEFAULT 0,
                             default_post_interval_hours INTEGER DEFAULT 3,
+                            text_style TEXT,
                             created_at TEXT NOT NULL
                         )
                     """)
@@ -182,6 +199,8 @@ class VideoRepository:
                         conn.execute("ALTER TABLE users ADD COLUMN share_to_feed INTEGER DEFAULT 0")
                     if "default_post_interval_hours" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN default_post_interval_hours INTEGER DEFAULT 3")
+                    if "text_style" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN text_style TEXT")
 
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS videos (
@@ -210,6 +229,15 @@ class VideoRepository:
                         conn.execute("ALTER TABLE videos ADD COLUMN last_used_at TEXT")
 
                     conn.execute("""
+                        CREATE TABLE IF NOT EXISTS video_cycle_usage (
+                            user_id TEXT NOT NULL,
+                            video_id INTEGER NOT NULL,
+                            used_at TEXT NOT NULL,
+                            PRIMARY KEY (user_id, video_id)
+                        )
+                    """)
+
+                    conn.execute("""
                         CREATE TABLE IF NOT EXISTS jobs (
                             id TEXT PRIMARY KEY,
                             user_id TEXT,
@@ -225,6 +253,8 @@ class VideoRepository:
                             original_s3_url TEXT,
                             instagram_media_id TEXT,
                             embedding TEXT,
+                            publish_state TEXT DEFAULT 'unpublished',
+                            publish_error TEXT,
                             created_at TEXT NOT NULL,
                             updated_at TEXT NOT NULL
                         )
@@ -247,6 +277,11 @@ class VideoRepository:
                         conn.execute("ALTER TABLE jobs ADD COLUMN instagram_media_id TEXT")
                     if "embedding" not in cols:
                         conn.execute("ALTER TABLE jobs ADD COLUMN embedding TEXT")
+                    if "publish_state" not in cols:
+                        conn.execute("ALTER TABLE jobs ADD COLUMN publish_state TEXT DEFAULT 'unpublished'")
+                    if "publish_error" not in cols:
+                        conn.execute("ALTER TABLE jobs ADD COLUMN publish_error TEXT")
+                    conn.execute("UPDATE jobs SET publish_state = 'posted' WHERE posted_at IS NOT NULL AND (publish_state IS NULL OR publish_state = 'unpublished')")
 
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS media_insights (
@@ -389,13 +424,20 @@ class VideoRepository:
         finally:
             conn.close()
 
-    def update_user_settings(self, user_id: str, default_caption_suffix: str, share_to_feed: int, default_post_interval_hours: int) -> None:
+    def update_user_settings(
+        self,
+        user_id: str,
+        default_caption_suffix: str,
+        share_to_feed: int,
+        default_post_interval_hours: int,
+        text_style: str | None = None,
+    ) -> None:
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
-                    f"UPDATE users SET default_caption_suffix = {self._ph(1)}, share_to_feed = {self._ph(1)}, default_post_interval_hours = {self._ph(1)} WHERE id = {self._ph(1)}",
-                    (default_caption_suffix, share_to_feed, default_post_interval_hours, user_id)
+                    f"UPDATE users SET default_caption_suffix = {self._ph(1)}, share_to_feed = {self._ph(1)}, default_post_interval_hours = {self._ph(1)}, text_style = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (default_caption_suffix, share_to_feed, default_post_interval_hours, text_style, user_id)
                 )
         finally:
             conn.close()
@@ -480,6 +522,68 @@ class VideoRepository:
                 )
         finally:
             conn.close()
+
+    def get_used_video_ids(self, user_id: str | None) -> set[int]:
+        effective_user_id = user_id or "__anonymous__"
+        ph = self._ph(1)
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                f"SELECT video_id FROM video_cycle_usage WHERE user_id = {ph}",
+                (effective_user_id,)
+            )
+            rows = cursor.fetchall()
+            return {int(row["video_id"]) for row in rows}
+        finally:
+            conn.close()
+
+    def mark_video_used(self, user_id: str | None, video_id: Any) -> None:
+        effective_user_id = user_id or "__anonymous__"
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"""
+                        INSERT INTO video_cycle_usage (user_id, video_id, used_at)
+                        VALUES ({self._ph(3)})
+                        ON CONFLICT (user_id, video_id) DO NOTHING
+                    """,
+                    (effective_user_id, int(video_id), now)
+                )
+                conn.execute(
+                    f"UPDATE videos SET usage_count = COALESCE(usage_count, 0) + 1, last_used_at = {self._ph(1)}, updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (now, now, video_id)
+                )
+        finally:
+            conn.close()
+
+    def reset_video_cycle(self, user_id: str | None) -> None:
+        effective_user_id = user_id or "__anonymous__"
+        ph = self._ph(1)
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(f"DELETE FROM video_cycle_usage WHERE user_id = {ph}", (effective_user_id,))
+        finally:
+            conn.close()
+
+    def get_rotation_candidates(
+        self,
+        user_id: str | None,
+        eligible_candidates: list[dict[str, Any]] | None = None,
+    ) -> tuple[list[dict[str, Any]], set[int]]:
+        if eligible_candidates is None:
+            candidates = self.get_all(user_id=user_id) if user_id else self.get_all()
+        else:
+            candidates = eligible_candidates
+        used_ids = self.get_used_video_ids(user_id)
+        available = [video for video in candidates if video.get("id") not in used_ids]
+        if not available and candidates:
+            self.reset_video_cycle(user_id)
+            used_ids = set()
+            available = candidates
+        return available, used_ids
 
     def update_job_instagram_media_id(self, job_id: str, instagram_media_id: str) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -735,9 +839,33 @@ class VideoRepository:
         ph = self._ph(1)
         conn = self._connect()
         try:
-            cursor = conn.execute(f"SELECT * FROM jobs WHERE status = 'scheduled' AND scheduled_at <= {ph}", (now,))
+            cursor = conn.execute(
+                f"SELECT * FROM jobs WHERE status = 'scheduled' AND scheduled_at <= {ph} AND COALESCE(publish_state, 'unpublished') = 'unpublished'",
+                (now,)
+            )
             rows = cursor.fetchall()
             return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def claim_job_for_publishing(self, job_id: str) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    f"""
+                        UPDATE jobs
+                        SET publish_state = 'publishing', publish_error = NULL, updated_at = {self._ph(1)}
+                        WHERE id = {self._ph(1)}
+                          AND posted_at IS NULL
+                          AND COALESCE(publish_state, 'unpublished') = 'unpublished'
+                          AND status IN ('completed', 'scheduled')
+                          AND COALESCE(output_path, '') <> ''
+                    """,
+                    (now, job_id)
+                )
+                return cursor.rowcount > 0 if hasattr(cursor, 'rowcount') else True
         finally:
             conn.close()
 
@@ -747,9 +875,50 @@ class VideoRepository:
         try:
             with conn:
                 conn.execute(
-                    f"UPDATE jobs SET status = 'completed', scheduled_at = NULL, posted_at = {self._ph(1)}, updated_at = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    f"""
+                        UPDATE jobs
+                        SET status = 'completed', scheduled_at = NULL, posted_at = {self._ph(1)},
+                            publish_state = 'posted', publish_error = NULL, updated_at = {self._ph(1)}
+                        WHERE id = {self._ph(1)}
+                    """,
                     (now, now, job_id)
                 )
+        finally:
+            conn.close()
+
+    def mark_job_publish_uncertain(self, job_id: str, error: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"""
+                        UPDATE jobs
+                        SET publish_state = 'uncertain', publish_error = {self._ph(1)}, updated_at = {self._ph(1)}
+                        WHERE id = {self._ph(1)}
+                    """,
+                    (error, now, job_id)
+                )
+        finally:
+            conn.close()
+
+    def resolve_job_publish_uncertain(self, job_id: str, confirm: bool) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        posted_at = now if confirm else None
+        publish_state = "posted" if confirm else "discarded"
+        conn = self._connect()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    f"""
+                        UPDATE jobs
+                        SET status = 'completed', scheduled_at = NULL, posted_at = {self._ph(1)},
+                            publish_state = {self._ph(1)}, publish_error = NULL, updated_at = {self._ph(1)}
+                        WHERE id = {self._ph(1)} AND publish_state = 'uncertain'
+                    """,
+                    (posted_at, publish_state, now, job_id)
+                )
+                return cursor.rowcount > 0 if hasattr(cursor, 'rowcount') else True
         finally:
             conn.close()
 

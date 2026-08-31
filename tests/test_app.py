@@ -186,3 +186,53 @@ def test_video_thumbnail_and_stream_endpoints(tmp_path):
 
     res_stream = client.get(f"/api/v1/videos/{vid['id']}/stream")
     assert res_stream.status_code == 200
+
+
+def test_user_settings_text_style_and_cycle_badge(tmp_path):
+    import uuid
+    from src.app import get_repo
+
+    repo = get_repo()
+    user_key = f"usr_key_style_{uuid.uuid4()}"
+    user = repo.create_user(
+        email=f"style_{uuid.uuid4()}@test.com",
+        password_hash="hash",
+        api_key=user_key,
+    )
+
+    res = client.get("/api/v1/user/me", headers={"X-API-Key": user_key})
+    assert res.status_code == 200
+    assert res.json()["text_style"] == {"font": "system", "color": "white", "background": "none"}
+    assert any(font["id"] == "montserrat" for font in res.json()["text_style_options"]["fonts"])
+
+    res = client.post(
+        "/api/v1/user/settings",
+        headers={"X-API-Key": user_key},
+        json={
+            "default_caption_suffix": "",
+            "share_to_feed": 0,
+            "default_post_interval_hours": 3,
+            "text_style": {"font": "montserrat", "color": "#0066FF", "background": "white"},
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["text_style"] == {"font": "montserrat", "color": "#0066FF", "background": "white"}
+
+    video_file = tmp_path / "style-video.mp4"
+    video_file.write_bytes(b"fake video")
+    repo.upsert({
+        "path": str(video_file),
+        "filename": "style-video.mp4",
+        "description": "Style video",
+        "themes": "style",
+        "orientation": "portrait",
+        "duration_seconds": 8.0,
+        "has_face": 0,
+        "frame_paths": [],
+    }, user_id=user["id"])
+
+    res = client.get("/api/v1/videos", headers={"X-API-Key": user_key})
+    assert res.status_code == 200
+    videos = res.json()["videos"]
+    assert len(videos) == 1
+    assert videos[0]["used_in_cycle"] is False

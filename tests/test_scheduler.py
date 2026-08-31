@@ -98,3 +98,42 @@ def test_early_publish_and_queue_shift_scenario(tmp_path, monkeypatch):
     assert j2_posted["status"] == "completed"
     assert j2_posted["posted_at"] is not None
     assert j2_posted["scheduled_at"] is None
+
+
+def test_scheduler_does_not_republish_claimed_job(tmp_path, monkeypatch):
+    import uuid
+    from src.database import VideoRepository
+    from src.scheduler import process_due_scheduled_jobs
+
+    repo = VideoRepository(str(tmp_path / "claimed.db"))
+    repo.ensure_schema()
+    user = repo.create_user(
+        email=f"claimed_{uuid.uuid4()}@test.com",
+        password_hash="hash",
+        api_key=f"key_{uuid.uuid4()}",
+    )
+    repo.update_user_instagram_credentials(user["id"], "ig_claim", "token_claim")
+
+    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/claimed/")
+    repo.update_job(job["id"], status="completed", output_path="https://s3/claimed.mp4")
+    repo.update_job_schedule(
+        job["id"],
+        caption="Claimed job",
+        scheduled_at="2026-07-25T11:00:00+00:00",
+        share_to_feed=0,
+    )
+
+    assert repo.claim_job_for_publishing(job["id"]) is True
+
+    published_jobs = []
+
+    class MockPublisher:
+        def publish_reel(self, video_url, caption, instagram_account_id, access_token, share_to_feed=False):
+            published_jobs.append(video_url)
+            return {"id": "ig_media_claimed"}
+
+    monkeypatch.setattr("src.instagram_publisher.InstagramPublisher", MockPublisher)
+
+    count = process_due_scheduled_jobs(repo)
+    assert count == 0
+    assert published_jobs == []

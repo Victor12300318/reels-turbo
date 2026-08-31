@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 
 import UserManagementTab from '../components/UserManagementTab'
+import TextStyleCard, { TextStyleOptions, TextStyleValue } from '../components/TextStyleCard'
 
 interface Job {
   id: string
@@ -47,6 +48,8 @@ interface Job {
   scheduled_at?: string
   posted_at?: string
   share_to_feed?: number
+  publish_state?: 'unpublished' | 'publishing' | 'posted' | 'uncertain' | 'discarded'
+  publish_error?: string
   created_at: string
 }
 
@@ -61,6 +64,7 @@ interface LocalVideo {
   frame_paths?: string[]
   usage_count?: number
   last_used_at?: string
+  used_in_cycle?: boolean
   updated_at?: string
 }
 
@@ -86,6 +90,12 @@ export default function DashboardPage() {
   const [defaultCaptionSuffix, setDefaultCaptionSuffix] = useState('')
   const [shareToFeed, setShareToFeed] = useState(false)
   const [intervalHours, setIntervalHours] = useState(3)
+  const [textStyle, setTextStyle] = useState<TextStyleValue>({ font: 'system', color: 'white', background: 'none' })
+  const [textStyleOptions, setTextStyleOptions] = useState<TextStyleOptions>({
+    fonts: [{ id: 'system', label: 'Padrão do sistema', css_family: 'system-ui' }],
+    colors: [{ id: 'white', label: 'Branco', hex: '#FFFFFF' }],
+    backgrounds: [{ id: 'none', label: 'Sem fundo' }]
+  })
   const [settingsSaving, setIgSaving] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
 
@@ -280,6 +290,10 @@ export default function DashboardPage() {
         setDefaultCaptionSuffix(data.default_caption_suffix || '')
         setShareToFeed(Boolean(data.share_to_feed))
         setIntervalHours(data.default_post_interval_hours || 3)
+        setTextStyle(data.text_style || { font: 'system', color: 'white', background: 'none' })
+        if (data.text_style_options) {
+          setTextStyleOptions(data.text_style_options)
+        }
         setIsAdmin(Boolean(data.is_admin))
       }
     } catch (e) {
@@ -361,8 +375,7 @@ export default function DashboardPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const saveUserSettings = async () => {
     setIgSaving(true)
     setSettingsMessage('')
     try {
@@ -372,7 +385,8 @@ export default function DashboardPage() {
         body: JSON.stringify({
           default_caption_suffix: defaultCaptionSuffix,
           share_to_feed: shareToFeed,
-          default_post_interval_hours: intervalHours
+          default_post_interval_hours: intervalHours,
+          text_style: textStyle
         })
       })
 
@@ -393,6 +407,15 @@ export default function DashboardPage() {
       setIgSaving(false)
       setTimeout(() => setSettingsMessage(''), 4000)
     }
+  }
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await saveUserSettings()
+  }
+
+  const handleSaveTextStyle = async () => {
+    await saveUserSettings()
   }
 
   const handleCreateClone = async (e: React.FormEvent) => {
@@ -431,6 +454,29 @@ export default function DashboardPage() {
         await fetchJobs(apiKey)
       } else {
         alert(`Erro ao publicar: ${data.detail || 'Falha no envio'}`)
+      }
+    } catch (e: any) {
+      alert(`Erro de conexão: ${e.message}`)
+    } finally {
+      setPublishingJobId(null)
+    }
+  }
+
+  const handleResolvePublish = async (jobId: string, action: 'confirm' | 'discard') => {
+    if (publishingJobId) return
+    setPublishingJobId(jobId)
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${jobId}/publish/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({ action })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert(data.message)
+        await fetchJobs(apiKey)
+      } else {
+        alert(data.detail || 'Não foi possível resolver a publicação incerta.')
       }
     } catch (e: any) {
       alert(`Erro de conexão: ${e.message}`)
@@ -887,6 +933,14 @@ export default function DashboardPage() {
                                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Postado
                                   </span>
+                                ) : job.publish_state === 'uncertain' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 shrink-0">
+                                    <AlertCircle className="w-3 h-3 text-amber-600" /> Publicação incerta
+                                  </span>
+                                ) : job.publish_state === 'publishing' ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066FF] border border-blue-200 flex items-center gap-1 shrink-0">
+                                    <RefreshCw className="w-3 h-3 animate-spin" /> Publicando
+                                  </span>
                                 ) : job.status === 'scheduled' ? (
                                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shrink-0" title={job.scheduled_at}>
                                     <Clock className="w-3 h-3 text-amber-600" /> Agendado ({formatScheduledTime(job.scheduled_at)})
@@ -981,12 +1035,37 @@ export default function DashboardPage() {
                               )}
                             </div>
 
+                            {/* PUBLISH UNCERTAIN RESOLUTION */}
+                            {isReadyOrScheduled && job.publish_state === 'uncertain' && (
+                              <div className="space-y-2 pt-2 border-t border-slate-100">
+                                <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] font-semibold text-amber-800">
+                                  A publicação foi enviada, mas o resultado é desconhecido. Confirme se ela apareceu no Instagram ou descarte a tentativa.
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleResolvePublish(job.id, 'confirm')}
+                                    disabled={publishingJobId === job.id}
+                                    className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2 text-[11px] font-bold transition-all disabled:opacity-50"
+                                  >
+                                    Confirmar publicado
+                                  </button>
+                                  <button
+                                    onClick={() => handleResolvePublish(job.id, 'discard')}
+                                    disabled={publishingJobId === job.id}
+                                    className="flex-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 py-2 text-[11px] font-bold transition-all disabled:opacity-50"
+                                  >
+                                    Descartar tentativa
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             {/* ACTION BUTTONS (COMPLETED & SCHEDULED) */}
-                            {isReadyOrScheduled && (
+                            {isReadyOrScheduled && job.publish_state !== 'uncertain' && (
                               <div className="flex gap-2 pt-2 border-t border-slate-100">
                                 <button
                                   onClick={() => handlePublishNow(job.id)}
-                                  disabled={publishingJobId === job.id}
+                                  disabled={publishingJobId === job.id || job.publish_state === 'publishing'}
                                   className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all"
                                 >
                                   {publishingJobId === job.id ? (
@@ -1146,9 +1225,15 @@ export default function DashboardPage() {
                         <div key={j.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Agendado ({formatScheduledTime(j.scheduled_at)})
-                              </span>
+                              {j.publish_state === 'uncertain' ? (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3 text-amber-600" /> Publicação incerta
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                  <Clock className="w-3 h-3" /> Agendado ({formatScheduledTime(j.scheduled_at)})
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs font-mono text-slate-600 truncate" title={j.url}>{j.url}</p>
 
@@ -1183,10 +1268,33 @@ export default function DashboardPage() {
                           </div>
 
                           {/* ACTION BUTTONS FOR SCHEDULED POSTS */}
+                          {j.publish_state === 'uncertain' ? (
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                              <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] font-semibold text-amber-800">
+                                A publicação foi enviada, mas o resultado é desconhecido. Confirme se ela apareceu no Instagram ou descarte a tentativa.
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleResolvePublish(j.id, 'confirm')}
+                                  disabled={publishingJobId === j.id}
+                                  className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2 text-[11px] font-bold transition-all disabled:opacity-50"
+                                >
+                                  Confirmar publicado
+                                </button>
+                                <button
+                                  onClick={() => handleResolvePublish(j.id, 'discard')}
+                                  disabled={publishingJobId === j.id}
+                                  className="flex-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 py-2 text-[11px] font-bold transition-all disabled:opacity-50"
+                                >
+                                  Descartar tentativa
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
                           <div className="flex gap-2 pt-2 border-t border-slate-100">
                             <button
                               onClick={() => handlePublishNow(j.id)}
-                              disabled={publishingJobId === j.id}
+                              disabled={publishingJobId === j.id || j.publish_state === 'publishing'}
                               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0066FF] hover:bg-blue-700 text-white py-2 text-xs font-bold shadow-sm shadow-blue-600/20 disabled:opacity-50 transition-all"
                             >
                               {publishingJobId === j.id ? (
@@ -1222,6 +1330,7 @@ export default function DashboardPage() {
                               </a>
                             )}
                           </div>
+                          )}
                         </div>
                       )
                     })}
@@ -1235,7 +1344,17 @@ export default function DashboardPage() {
           {/* TAB 3: CONFIGURAÇÕES & AJUSTES */}
           {activeTab === 'editor' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+              <div className="lg:col-span-2">
+                <TextStyleCard
+                  value={textStyle}
+                  options={textStyleOptions}
+                  saving={settingsSaving}
+                  message={settingsMessage}
+                  onChange={setTextStyle}
+                  onSave={handleSaveTextStyle}
+                />
+              </div>
+
               {/* LEGENDA FIXA & REELS OPTIONS */}
               <form onSubmit={handleSaveSettings} className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -1447,16 +1566,19 @@ export default function DashboardPage() {
                             <p className="text-xs font-bold text-slate-800 truncate" title={vid.filename}>{vid.filename}</p>
                             <p className="text-[10px] text-slate-500 line-clamp-2">{vid.description || 'Indexado pela IA'}</p>
 
-                            <div className="flex items-center gap-1.5 pt-1">
-                              {(vid.usage_count || 0) === 0 ? (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  Usado 0x (Prioridade)
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              {vid.used_in_cycle ? (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  Usado no ciclo atual
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                  Usado {vid.usage_count}x
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Disponível no ciclo
                                 </span>
                               )}
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-slate-50 text-slate-600 border border-slate-200">
+                                Usado {vid.usage_count || 0}x
+                              </span>
                             </div>
                           </div>
                         </div>

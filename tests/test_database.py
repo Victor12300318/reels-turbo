@@ -162,3 +162,78 @@ def test_video_usage_increment_and_insights(repo):
     assert top_reels[0]["views"] == 15000
 
 
+def test_rotation_cycle_per_user(repo):
+    user = repo.create_user(email="rotation@test.com", password_hash="hash", api_key="key_rotation")
+    repo.upsert({
+        "path": "rotation-v1.mp4",
+        "filename": "v1.mp4",
+        "description": "Video 1",
+        "themes": "test",
+        "orientation": "portrait",
+        "duration_seconds": 10.0,
+        "has_face": 0,
+        "frame_paths": ["f1.jpg"],
+    }, user_id=user["id"])
+    repo.upsert({
+        "path": "rotation-v2.mp4",
+        "filename": "v2.mp4",
+        "description": "Video 2",
+        "themes": "test",
+        "orientation": "portrait",
+        "duration_seconds": 12.0,
+        "has_face": 0,
+        "frame_paths": ["f2.jpg"],
+    }, user_id=user["id"])
+
+    available, used_ids = repo.get_rotation_candidates(user["id"])
+    assert len(available) == 2
+    assert used_ids == set()
+
+    first = next(video for video in available if video["filename"] == "v1.mp4")
+    repo.mark_video_used(user["id"], first["id"])
+
+    available, used_ids = repo.get_rotation_candidates(user["id"])
+    assert used_ids == {first["id"]}
+    assert all(video["id"] != first["id"] for video in available)
+
+    second = next(video for video in available if video["filename"] == "v2.mp4")
+    repo.mark_video_used(user["id"], second["id"])
+
+    available, used_ids = repo.get_rotation_candidates(user["id"])
+    assert used_ids == set()
+    assert len(available) == 2
+
+    available, used_ids = repo.get_rotation_candidates(user["id"], [first])
+    assert used_ids == set()
+    assert available == [first]
+
+
+def test_publish_claim_and_uncertain_resolution(repo):
+    user = repo.create_user(email="publish-once@test.com", password_hash="hash", api_key="key_publish_once")
+    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/publish/")
+    repo.update_job(job["id"], status="completed", output_path="https://s3/output.mp4")
+
+    assert repo.claim_job_for_publishing(job["id"]) is True
+    assert repo.claim_job_for_publishing(job["id"]) is False
+
+    repo.mark_job_publish_uncertain(job["id"], "timeout")
+    uncertain = repo.get_job(job["id"])
+    assert uncertain["publish_state"] == "uncertain"
+    assert uncertain["publish_error"] == "timeout"
+
+    assert repo.resolve_job_publish_uncertain(job["id"], True) is True
+    confirmed = repo.get_job(job["id"])
+    assert confirmed["publish_state"] == "posted"
+    assert confirmed["posted_at"] is not None
+
+    discarded_job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/discard/")
+    repo.update_job(discarded_job["id"], status="completed", output_path="https://s3/discard.mp4")
+    assert repo.claim_job_for_publishing(discarded_job["id"]) is True
+    repo.mark_job_publish_uncertain(discarded_job["id"], "connection lost")
+    assert repo.resolve_job_publish_uncertain(discarded_job["id"], False) is True
+
+    discarded = repo.get_job(discarded_job["id"])
+    assert discarded["publish_state"] == "discarded"
+    assert discarded["posted_at"] is None
+
+

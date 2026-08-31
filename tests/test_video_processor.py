@@ -86,3 +86,43 @@ def test_face_avoidance_forces_bottom_safe_zone():
         assert int(y_val) >= 1200
 
 
+def test_drawtext_filter_supports_white_background():
+    from src.video_processor import _build_drawtext_filter
+    filter_str = _build_drawtext_filter(
+        text="Texto com fundo branco",
+        style={"font_color": "black", "background_mode": "white"},
+        face_position="bottom",
+        video_width=1080,
+        video_height=1920,
+        font_path="font.ttf",
+    )
+    assert "boxcolor=white@0.65" in filter_str
+
+
+def test_drawtext_filter_supports_black_background():
+    from src.video_processor import _build_drawtext_filter
+    filter_str = _build_drawtext_filter(
+        text="Texto com fundo preto",
+        style={"font_color": "white", "background_mode": "black"},
+        face_position="bottom",
+        video_width=1080,
+        video_height=1920,
+        font_path="font.ttf",
+    )
+    assert "boxcolor=black@0.65" in filter_str
+
+
+def test_drawtext_filter_supports_custom_hex_color():
+    from src.video_processor import _build_drawtext_filter
+    filter_str = _build_drawtext_filter(
+        text="Texto colorido",
+        style={"font_color": "#0066FF", "background_mode": "none"},
+        face_position="bottom",
+        video_width=1080,
+        video_height=1920,
+        font_path="font.ttf",
+    )
+    assert "fontcolor=#0066FF" in filter_str
+    assert "bordercolor=black" in filter_str
+
+

@@ -76,6 +76,10 @@ def process_due_scheduled_jobs(repo: Any) -> int:
             logger.warning(f"Job {job['id']} skipped auto-post: missing credentials or output URL.")
             continue
 
+        if not repo.claim_job_for_publishing(job["id"]):
+            logger.warning(f"Job {job['id']} was already claimed for publishing.")
+            continue
+
         try:
             logger.info(f"Auto-publishing scheduled job {job['id']} to Instagram...")
             publisher = InstagramPublisher()
@@ -95,7 +99,8 @@ def process_due_scheduled_jobs(repo: Any) -> int:
             repo.mark_job_posted(job["id"])
             processed_count += 1
         except Exception as e:
-            logger.error(f"Failed to publish scheduled job {job['id']}: {e}")
+            repo.mark_job_publish_uncertain(job["id"], str(e))
+            logger.error(f"Publish result for scheduled job {job['id']} is uncertain: {e}")
 
     return processed_count
 

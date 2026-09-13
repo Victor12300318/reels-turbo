@@ -69,6 +69,38 @@ def process_due_scheduled_jobs(repo: Any) -> int:
 
     for job in due_jobs:
         user = repo.get_user_by_id(job["user_id"]) or {}
+        delivery_channel = (user.get("delivery_channel") or "instagram").lower().strip()
+
+        if delivery_channel == "telegram":
+            tg_bot_token = user.get("telegram_bot_token")
+            tg_channel_id = user.get("telegram_channel_id")
+            if not tg_bot_token or not tg_channel_id or not job.get("output_path"):
+                logger.warning(f"Job {job['id']} skipped auto-post: missing Telegram credentials or output.")
+                continue
+
+            if not repo.claim_job_for_publishing(job["id"]):
+                logger.warning(f"Job {job['id']} was already claimed for publishing.")
+                continue
+
+            try:
+                from src.telegram_publisher import TelegramPublisher
+                logger.info(f"Auto-dispatching scheduled job {job['id']} to Telegram...")
+                tg_pub = TelegramPublisher()
+                caption = job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
+                tg_pub.publish_video(
+                    video_path=job["output_path"],
+                    caption=caption,
+                    bot_token=tg_bot_token,
+                    channel_id=tg_channel_id,
+                    original_url=job.get("url"),
+                )
+                repo.mark_job_posted(job["id"])
+                processed_count += 1
+            except Exception as e:
+                repo.mark_job_publish_uncertain(job["id"], f"Telegram error: {e}")
+                logger.error(f"Publish result for scheduled job {job['id']} to Telegram is uncertain: {e}")
+            continue
+
         ig_account_id = user.get("instagram_account_id")
         ig_token = user.get("instagram_access_token")
 

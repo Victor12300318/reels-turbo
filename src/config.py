@@ -44,6 +44,9 @@ class Settings:
     instagram_redirect_uri: str = "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback"
     instagram_account_id: str = ""
     instagram_access_token: str = ""
+    delivery_channel: str = "instagram"
+    telegram_bot_token: str = ""
+    telegram_channel_id: str = ""
     webhook_verify_token: str = "reels_cloner_token_123"
     admin_email: str = ""
     admin_password: str = ""
@@ -92,6 +95,9 @@ def get_settings() -> Settings:
         instagram_redirect_uri=os.getenv("INSTAGRAM_REDIRECT_URI", "https://reelsturbo.hdstec.com.br/api/v1/auth/instagram/callback"),
         instagram_account_id=os.getenv("INSTAGRAM_ACCOUNT_ID", ""),
         instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),
+        delivery_channel=os.getenv("DELIVERY_CHANNEL", "instagram").lower().strip(),
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
+        telegram_channel_id=os.getenv("TELEGRAM_CHANNEL_ID", "").strip(),
         webhook_verify_token=os.getenv("WEBHOOK_VERIFY_TOKEN", "reels_cloner_token_123"),
         admin_email=os.getenv("ADMIN_EMAIL", ""),
         admin_password=os.getenv("ADMIN_PASSWORD", ""),

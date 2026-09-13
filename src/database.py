@@ -51,6 +51,9 @@ class VideoRepository:
                         is_active INTEGER DEFAULT 1,
                         instagram_account_id TEXT,
                         instagram_access_token TEXT,
+                        delivery_channel TEXT DEFAULT 'instagram',
+                        telegram_bot_token TEXT,
+                        telegram_channel_id TEXT,
                         default_caption_suffix TEXT,
                         share_to_feed INTEGER DEFAULT 0,
                         default_post_interval_hours INTEGER DEFAULT 3,
@@ -63,6 +66,9 @@ class VideoRepository:
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_account_id TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_access_token TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS delivery_channel TEXT DEFAULT 'instagram'")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
+                conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_channel_id TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_caption_suffix TEXT")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS share_to_feed INTEGER DEFAULT 0")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_post_interval_hours INTEGER DEFAULT 3")
@@ -174,6 +180,9 @@ class VideoRepository:
                             is_active INTEGER DEFAULT 1,
                             instagram_account_id TEXT,
                             instagram_access_token TEXT,
+                            delivery_channel TEXT DEFAULT 'instagram',
+                            telegram_bot_token TEXT,
+                            telegram_channel_id TEXT,
                             default_caption_suffix TEXT,
                             share_to_feed INTEGER DEFAULT 0,
                             default_post_interval_hours INTEGER DEFAULT 3,
@@ -193,6 +202,12 @@ class VideoRepository:
                         conn.execute("ALTER TABLE users ADD COLUMN instagram_account_id TEXT")
                     if "instagram_access_token" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN instagram_access_token TEXT")
+                    if "delivery_channel" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN delivery_channel TEXT DEFAULT 'instagram'")
+                    if "telegram_bot_token" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN telegram_bot_token TEXT")
+                    if "telegram_channel_id" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN telegram_channel_id TEXT")
                     if "default_caption_suffix" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN default_caption_suffix TEXT")
                     if "share_to_feed" not in cols:
@@ -325,7 +340,8 @@ class VideoRepository:
             conn.close()
         return {
             "id": uid, "email": email, "api_key": api_key, "password_salt": password_salt,
-            "is_admin": is_admin, "is_active": is_active, "created_at": created_at
+            "is_admin": is_admin, "is_active": is_active, "created_at": created_at,
+            "delivery_channel": "instagram"
         }
 
     def get_all_users(self) -> list[dict[str, Any]]:
@@ -424,6 +440,17 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def update_user_telegram_credentials(self, user_id: str, bot_token: str, channel_id: str) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE users SET telegram_bot_token = {self._ph(1)}, telegram_channel_id = {self._ph(1)} WHERE id = {self._ph(1)}",
+                    (bot_token, channel_id, user_id)
+                )
+        finally:
+            conn.close()
+
     def update_user_settings(
         self,
         user_id: str,
@@ -431,14 +458,21 @@ class VideoRepository:
         share_to_feed: int,
         default_post_interval_hours: int,
         text_style: str | None = None,
+        delivery_channel: str | None = None,
     ) -> None:
         conn = self._connect()
         try:
             with conn:
-                conn.execute(
-                    f"UPDATE users SET default_caption_suffix = {self._ph(1)}, share_to_feed = {self._ph(1)}, default_post_interval_hours = {self._ph(1)}, text_style = {self._ph(1)} WHERE id = {self._ph(1)}",
-                    (default_caption_suffix, share_to_feed, default_post_interval_hours, text_style, user_id)
-                )
+                if delivery_channel:
+                    conn.execute(
+                        f"UPDATE users SET default_caption_suffix = {self._ph(1)}, share_to_feed = {self._ph(1)}, default_post_interval_hours = {self._ph(1)}, text_style = {self._ph(1)}, delivery_channel = {self._ph(1)} WHERE id = {self._ph(1)}",
+                        (default_caption_suffix, share_to_feed, default_post_interval_hours, text_style, delivery_channel, user_id)
+                    )
+                else:
+                    conn.execute(
+                        f"UPDATE users SET default_caption_suffix = {self._ph(1)}, share_to_feed = {self._ph(1)}, default_post_interval_hours = {self._ph(1)}, text_style = {self._ph(1)} WHERE id = {self._ph(1)}",
+                        (default_caption_suffix, share_to_feed, default_post_interval_hours, text_style, user_id)
+                    )
         finally:
             conn.close()
 

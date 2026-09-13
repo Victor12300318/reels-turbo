@@ -236,37 +236,67 @@ def background_job_processor(job_id: str, user_id: str, url: str, output_dir: st
         repo.update_job(job_id, status="completed", progress=100, output_path=public_url)
         logging.info(f"[Job {job_id}] Completed successfully: {public_url}")
 
-        # Auto-post or Auto-schedule queue to Instagram
+        # Auto-post or Auto-schedule queue according to delivery channel
         user = repo.get_user_by_id(user_id) or {}
-        ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
-        ig_token = user.get("instagram_access_token") or settings.instagram_access_token
+        delivery_channel = (user.get("delivery_channel") or settings.delivery_channel or "instagram").lower().strip()
         user_caption = user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
-        stf = bool(user.get("share_to_feed", 0))
-        raw_interval = user.get("default_post_interval_hours")
-        interval_hours = int(raw_interval) if raw_interval is not None else 3
 
-        if ig_account_id and ig_token and public_url.startswith("http"):
-            if interval_hours == 0:
+        if delivery_channel == "telegram":
+            tg_bot_token = user.get("telegram_bot_token") or settings.telegram_bot_token
+            tg_channel_id = user.get("telegram_channel_id") or settings.telegram_channel_id
+            if tg_bot_token and tg_channel_id:
                 if not repo.claim_job_for_publishing(job_id):
-                    logging.warning(f"[Job {job_id}] Publishing skipped because job was already claimed.")
+                    logging.warning(f"[Job {job_id}] Telegram delivery skipped because job was already claimed.")
                 else:
                     try:
-                        from src.instagram_publisher import InstagramPublisher
-                        logging.info(f"[Job {job_id}] Auto-posting Reels immediately to Instagram account {ig_account_id}...")
-                        publisher = InstagramPublisher()
-                        publisher.publish_reel(
-                            video_url=public_url,
+                        from src.telegram_publisher import TelegramPublisher
+                        logging.info(f"[Job {job_id}] Dispatching video immediately to Telegram channel {tg_channel_id}...")
+                        tg_publisher = TelegramPublisher()
+                        send_target = final_video_path if os.path.exists(final_video_path) else public_url
+                        tg_publisher.publish_video(
+                            video_path=send_target,
                             caption=user_caption,
-                            instagram_account_id=ig_account_id,
-                            access_token=ig_token,
-                            share_to_feed=stf
+                            bot_token=tg_bot_token,
+                            channel_id=tg_channel_id,
+                            original_url=url,
                         )
                         repo.mark_job_posted(job_id)
                         if webhook_url:
                             send_video_to_n8n(final_video_path, url, webhook_url)
-                    except Exception as ig_err:
-                        repo.mark_job_publish_uncertain(job_id, str(ig_err))
-                        logging.error(f"[Job {job_id}] Immediate Instagram auto-post result is uncertain: {ig_err}")
+                    except Exception as tg_err:
+                        repo.mark_job_publish_uncertain(job_id, f"Telegram error: {tg_err}")
+                        logging.error(f"[Job {job_id}] Immediate Telegram delivery failed: {tg_err}")
+            else:
+                logging.warning(f"[Job {job_id}] Telegram delivery selected but bot_token or channel_id is not set.")
+        else:
+            ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
+            ig_token = user.get("instagram_access_token") or settings.instagram_access_token
+            stf = bool(user.get("share_to_feed", 0))
+            raw_interval = user.get("default_post_interval_hours")
+            interval_hours = int(raw_interval) if raw_interval is not None else 3
+
+            if ig_account_id and ig_token and public_url.startswith("http"):
+                if interval_hours == 0:
+                    if not repo.claim_job_for_publishing(job_id):
+                        logging.warning(f"[Job {job_id}] Publishing skipped because job was already claimed.")
+                    else:
+                        try:
+                            from src.instagram_publisher import InstagramPublisher
+                            logging.info(f"[Job {job_id}] Auto-posting Reels immediately to Instagram account {ig_account_id}...")
+                            publisher = InstagramPublisher()
+                            publisher.publish_reel(
+                                video_url=public_url,
+                                caption=user_caption,
+                                instagram_account_id=ig_account_id,
+                                access_token=ig_token,
+                                share_to_feed=stf
+                            )
+                            repo.mark_job_posted(job_id)
+                            if webhook_url:
+                                send_video_to_n8n(final_video_path, url, webhook_url)
+                        except Exception as ig_err:
+                            repo.mark_job_publish_uncertain(job_id, str(ig_err))
+                            logging.error(f"[Job {job_id}] Immediate Instagram auto-post result is uncertain: {ig_err}")
             else:
                 # Automatic Rolling Queue Scheduling
                 from datetime import datetime, timedelta, timezone
@@ -462,8 +492,11 @@ def get_me(request: Request, x_api_key: str | None = Header(None)):
         "email": user["email"],
         "api_key": user["api_key"],
         "is_admin": int(user.get("is_admin", 0)),
+        "delivery_channel": user.get("delivery_channel") or settings.delivery_channel or "instagram",
         "instagram_account_id": user.get("instagram_account_id") or "",
         "instagram_access_token": user.get("instagram_access_token") or "",
+        "telegram_bot_token": user.get("telegram_bot_token") or "",
+        "telegram_channel_id": user.get("telegram_channel_id") or "",
         "default_caption_suffix": user.get("default_caption_suffix") or "",
         "share_to_feed": user.get("share_to_feed", 0),
         "default_post_interval_hours": user.get("default_post_interval_hours", 3),
@@ -479,6 +512,12 @@ async def update_user_settings_endpoint(request: Request, x_api_key: str | None 
     default_caption_suffix = body.get("default_caption_suffix", "").strip()
     share_to_feed = 1 if body.get("share_to_feed") in (True, 1, "true", "1") else 0
     default_post_interval_hours = int(body.get("default_post_interval_hours", 3))
+    raw_channel = body.get("delivery_channel")
+    if raw_channel:
+        delivery_channel = "telegram" if raw_channel.lower().strip() == "telegram" else "instagram"
+    else:
+        delivery_channel = user.get("delivery_channel") or "instagram"
+
     if body.get("text_style") is None:
         text_style = normalize_text_style(user.get("text_style"))
     else:
@@ -490,12 +529,20 @@ async def update_user_settings_endpoint(request: Request, x_api_key: str | None 
         default_caption_suffix,
         share_to_feed,
         default_post_interval_hours,
-        json.dumps(text_style, ensure_ascii=False)
+        json.dumps(text_style, ensure_ascii=False),
+        delivery_channel=delivery_channel
     )
+
+    # Allow updating telegram credentials directly in settings payload if provided
+    if body.get("telegram_bot_token") is not None or body.get("telegram_channel_id") is not None:
+        bot_token = body.get("telegram_bot_token", user.get("telegram_bot_token") or "").strip()
+        channel_id = body.get("telegram_channel_id", user.get("telegram_channel_id") or "").strip()
+        repo.update_user_telegram_credentials(user["id"], bot_token, channel_id)
 
     return {
         "status": "success",
         "message": "Configurações salvas com sucesso!",
+        "delivery_channel": delivery_channel,
         "default_caption_suffix": default_caption_suffix,
         "share_to_feed": share_to_feed,
         "default_post_interval_hours": default_post_interval_hours,
@@ -517,6 +564,23 @@ async def update_instagram_credentials(request: Request, x_api_key: str | None =
         "status": "success",
         "message": "Credenciais do Instagram salvas com sucesso!",
         "instagram_account_id": account_id
+    }
+
+
+@app.post("/api/v1/user/telegram")
+async def update_telegram_credentials(request: Request, x_api_key: str | None = Header(None)):
+    user = authenticate_request(request, x_api_key)
+    body = await request.json()
+    bot_token = body.get("telegram_bot_token", "").strip()
+    channel_id = body.get("telegram_channel_id", "").strip()
+
+    repo = get_repo()
+    repo.update_user_telegram_credentials(user["id"], bot_token, channel_id)
+
+    return {
+        "status": "success",
+        "message": "Credenciais do Telegram salvas com sucesso!",
+        "telegram_channel_id": channel_id
     }
 
 
@@ -849,6 +913,45 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if job["status"] not in ("completed", "scheduled") or not job.get("output_path"):
         raise HTTPException(status_code=400, detail="Vídeo ainda não foi renderizado ou falhou.")
 
+    old_scheduled_at = job.get("scheduled_at")
+    was_scheduled = job.get("status") == "scheduled" or bool(old_scheduled_at)
+    final_caption = caption or job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
+
+    delivery_channel = (user.get("delivery_channel") or settings.delivery_channel or "instagram").lower().strip()
+
+    if delivery_channel == "telegram":
+        tg_bot_token = user.get("telegram_bot_token") or settings.telegram_bot_token
+        tg_channel_id = user.get("telegram_channel_id") or settings.telegram_channel_id
+        if not tg_bot_token or not tg_channel_id:
+            raise HTTPException(status_code=400, detail="Configure o Telegram Bot Token e o Channel ID no painel antes de enviar.")
+
+        if not repo.claim_job_for_publishing(job_id):
+            raise HTTPException(status_code=409, detail="Este job já está em publicação ou já foi publicado.")
+
+        from src.telegram_publisher import TelegramPublisher
+        tg_publisher = TelegramPublisher()
+        try:
+            tg_publisher.publish_video(
+                video_path=job["output_path"],
+                caption=final_caption,
+                bot_token=tg_bot_token,
+                channel_id=tg_channel_id,
+                original_url=job.get("url"),
+            )
+        except Exception as tg_err:
+            repo.mark_job_publish_uncertain(job_id, f"Telegram error: {tg_err}")
+            raise HTTPException(status_code=502, detail=f"Falha ao enviar para o Telegram: {tg_err}")
+
+        repo.mark_job_posted(job_id)
+        if was_scheduled and old_scheduled_at:
+            repo.shift_schedule_queue_after_posting(user["id"], old_scheduled_at)
+
+        return {
+            "status": "success",
+            "message": "Vídeo despachado com sucesso para o canal do Telegram!",
+            "job_id": job_id
+        }
+
     ig_account_id = user.get("instagram_account_id") or settings.instagram_account_id
     ig_token = user.get("instagram_access_token") or settings.instagram_access_token
 
@@ -858,12 +961,8 @@ async def publish_job_now(job_id: str, request: Request, x_api_key: str | None =
     if not repo.claim_job_for_publishing(job_id):
         raise HTTPException(status_code=409, detail="Este job já está em publicação ou já foi publicado.")
 
-    old_scheduled_at = job.get("scheduled_at")
-    was_scheduled = job.get("status") == "scheduled" or bool(old_scheduled_at)
-
     from src.instagram_publisher import InstagramPublisher
     publisher = InstagramPublisher()
-    final_caption = caption or job.get("caption") or user.get("default_caption_suffix") or "Clonado com Clonify AI #reels"
     stf = bool(share_to_feed if share_to_feed is not None else job.get("share_to_feed", user.get("share_to_feed", 0)))
 
     try:

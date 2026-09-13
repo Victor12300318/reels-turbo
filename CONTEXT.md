@@ -56,7 +56,15 @@ _Avoid_: Estilo da IA, campos vazios
 Posição e tamanho do texto definidos pelas regras de zona segura do vídeo, sem escolha do usuário.
 _Avoid_: Preferência de posição, escolha de tamanho
 
-### Publicação
+### Publicação e Entrega
+
+**Destino de entrega**:
+Canal de saída configurado pelo usuário para receber o vídeo processado (Instagram ou Telegram).
+_Avoid_: Tipo de postagem, modo de exportação
+
+**Despacho para Telegram**:
+Envio imediato do arquivo de vídeo renderizado para o canal do Telegram configurado pelo usuário, contornando a fila de agendamento do Instagram.
+_Avoid_: Notificação de conclusão, webhook do Telegram
 
 **Postagem exatamente única**:
 Garantia de que um job resulta em no máximo uma publicação no Instagram, tanto no agendamento quanto na publicação manual; um resultado incerto bloqueia novas tentativas até ser resolvido.

@@ -99,6 +99,11 @@ export default function DashboardPage() {
   const [settingsSaving, setIgSaving] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
 
+  // Delivery channel & credentials state
+  const [deliveryChannel, setDeliveryChannel] = useState<'instagram' | 'telegram'>('instagram')
+  const [telegramBotToken, setTelegramBotToken] = useState('')
+  const [telegramChannelId, setTelegramChannelId] = useState('')
+
   // Meta Instagram state
   const [igAccountId, setIgAccountId] = useState('')
   const [igAccessToken, setIgAccessToken] = useState('')
@@ -285,6 +290,9 @@ export default function DashboardPage() {
       const res = await fetch(`${API_BASE}/user/me`, { headers: { 'X-API-Key': key } })
       if (res.ok) {
         const data = await res.json()
+        setDeliveryChannel(data.delivery_channel === 'telegram' ? 'telegram' : 'instagram')
+        setTelegramBotToken(data.telegram_bot_token || '')
+        setTelegramChannelId(data.telegram_channel_id || '')
         setIgAccountId(data.instagram_account_id || '')
         setIgAccessToken(data.instagram_access_token || '')
         setDefaultCaptionSuffix(data.default_caption_suffix || '')
@@ -383,18 +391,27 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
         body: JSON.stringify({
+          delivery_channel: deliveryChannel,
           default_caption_suffix: defaultCaptionSuffix,
           share_to_feed: shareToFeed,
           default_post_interval_hours: intervalHours,
-          text_style: textStyle
+          text_style: textStyle,
+          telegram_bot_token: telegramBotToken,
+          telegram_channel_id: telegramChannelId
         })
       })
 
-      if (igAccountId && igAccessToken) {
+      if (deliveryChannel === 'instagram' && igAccountId && igAccessToken) {
         await fetch(`${API_BASE}/user/instagram`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
           body: JSON.stringify({ instagram_account_id: igAccountId, instagram_access_token: igAccessToken })
+        })
+      } else if (deliveryChannel === 'telegram') {
+        await fetch(`${API_BASE}/user/telegram`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+          body: JSON.stringify({ telegram_bot_token: telegramBotToken, telegram_channel_id: telegramChannelId })
         })
       }
 
@@ -450,7 +467,7 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        alert('Reels publicado no Instagram com sucesso!')
+        alert(data.message || (deliveryChannel === 'telegram' ? 'Vídeo enviado para o canal do Telegram com sucesso!' : 'Reels publicado no Instagram com sucesso!'))
         await fetchJobs(apiKey)
       } else {
         alert(`Erro ao publicar: ${data.detail || 'Falha no envio'}`)
@@ -1358,8 +1375,41 @@ export default function DashboardPage() {
               {/* LEGENDA FIXA & REELS OPTIONS */}
               <form onSubmit={handleSaveSettings} className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm hover:shadow-md transition-all">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <Settings className="w-4 h-4 text-[#0066FF]" /> Configurações de Postagem Automática
+                  <Settings className="w-4 h-4 text-[#0066FF]" /> Configurações de Destino e Publicação
                 </h3>
+
+                {/* DESTINO DE ENTREGA */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-700">Destino de Entrega do Vídeo</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryChannel('instagram')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        deliveryChannel === 'instagram'
+                          ? 'border-[#0066FF] bg-blue-50/50 text-[#0066FF] ring-2 ring-[#0066FF]/20'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <p className="text-xs font-bold">Instagram Reels</p>
+                      <p className="text-[10px] opacity-80 mt-0.5">Postar ou agendar direto na conta</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryChannel('telegram')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        deliveryChannel === 'telegram'
+                          ? 'border-[#0066FF] bg-blue-50/50 text-[#0066FF] ring-2 ring-[#0066FF]/20'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <p className="text-xs font-bold flex items-center gap-1.5">
+                        <Send className="w-3.5 h-3.5" /> Canal Telegram
+                      </p>
+                      <p className="text-[10px] opacity-80 mt-0.5">Despacho imediato para o canal</p>
+                    </button>
+                  </div>
+                </div>
 
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-700">Legenda Fixa Padrão (Assinatura)</label>
@@ -1373,78 +1423,121 @@ export default function DashboardPage() {
                   <p className="text-[10px] text-slate-500">Esta assinatura será anexada no final da legenda do Reels clonado.</p>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-700">Intervalo de Agendamento Padrão</label>
-                  <select
-                    value={intervalHours}
-                    onChange={(e) => setIntervalHours(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
-                  >
-                    <option value={0}>Postagem Imediata (Assim que o Reels ficar pronto)</option>
-                    <option value={1}>A cada 1 hora</option>
-                    <option value={2}>A cada 2 horas</option>
-                    <option value={3}>A cada 3 horas (Recomendado)</option>
-                    <option value={5}>A cada 5 horas</option>
-                    <option value={8}>A cada 8 horas</option>
-                    <option value={12}>A cada 12 horas</option>
-                    <option value={24}>A cada 24 horas (1 por dia)</option>
-                  </select>
-                </div>
+                {/* SELECIONADO: TELEGRAM */}
+                {deliveryChannel === 'telegram' && (
+                  <div className="space-y-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <Send className="w-3.5 h-3.5 text-[#0066FF]" /> Configuração do Bot e Canal Telegram
+                      </label>
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">Envio Imediato</span>
+                    </div>
 
-                <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-900">Postar Apenas na Aba Reels</p>
-                    <p className="text-[10px] text-slate-500">Não compartilha o vídeo na grade do Feed principal</p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[11px] font-medium text-slate-600">Telegram Bot Token</label>
+                        <input
+                          type="password"
+                          value={telegramBotToken}
+                          onChange={(e) => setTelegramBotToken(e.target.value)}
+                          placeholder="Ex: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#0066FF] focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-slate-600">ID ou @username do Canal/Grupo</label>
+                        <input
+                          type="text"
+                          value={telegramChannelId}
+                          onChange={(e) => setTelegramChannelId(e.target.value)}
+                          placeholder="Ex: @meucanal ou -1001234567890"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#0066FF] focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Certifique-se de adicionar o seu bot como Administrador do canal com permissão para postar mensagens/vídeos.
+                    </p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={!shareToFeed}
-                    onChange={(e) => setShareToFeed(!e.target.checked)}
-                    className="w-4 h-4 rounded accent-[#0066FF]"
-                  />
-                </div>
+                )}
 
-                {/* META INSTAGRAM CONNECT & RAG INSIGHTS */}
-                <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <label className="text-xs font-semibold text-slate-700">Conexão Meta & Loop RAG Insights</label>
-                  <a
-                    href="/api/v1/auth/instagram/login"
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-sm transition-all"
-                  >
-                    <Sparkles className="w-4 h-4 text-[#0066FF]" /> Logar Direto com o Instagram Meta
-                  </a>
+                {/* SELECIONADO: INSTAGRAM */}
+                {deliveryChannel === 'instagram' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-700">Intervalo de Agendamento Padrão</label>
+                      <select
+                        value={intervalHours}
+                        onChange={(e) => setIntervalHours(Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 focus:border-[#0066FF] focus:bg-white focus:outline-none transition-all"
+                      >
+                        <option value={0}>Postagem Imediata (Assim que o Reels ficar pronto)</option>
+                        <option value={1}>A cada 1 hora</option>
+                        <option value={2}>A cada 2 horas</option>
+                        <option value={3}>A cada 3 horas (Recomendado)</option>
+                        <option value={5}>A cada 5 horas</option>
+                        <option value={8}>A cada 8 horas</option>
+                        <option value={12}>A cada 12 horas</option>
+                        <option value={24}>A cada 24 horas (1 por dia)</option>
+                      </select>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={handleSyncInsights}
-                    disabled={syncingInsights}
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 py-2.5 text-xs font-bold border border-slate-200 transition-all disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 text-[#0066FF] ${syncingInsights ? 'animate-spin' : ''}`} />
-                    {syncingInsights ? 'Sincronizando Métricas Meta...' : 'Sincronizar Métricas do Meta Instagram'}
-                  </button>
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">Postar Apenas na Aba Reels</p>
+                        <p className="text-[10px] text-slate-500">Não compartilha o vídeo na grade do Feed principal</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={!shareToFeed}
+                        onChange={(e) => setShareToFeed(!e.target.checked)}
+                        className="w-4 h-4 rounded accent-[#0066FF]"
+                      />
+                    </div>
 
-                  {insightsMessage && (
-                    <p className="text-[11px] text-blue-800 bg-blue-50 p-2.5 rounded-xl border border-blue-200">{insightsMessage}</p>
-                  )}
+                    {/* META INSTAGRAM CONNECT & RAG INSIGHTS */}
+                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                      <label className="text-xs font-semibold text-slate-700">Conexão Meta & Loop RAG Insights</label>
+                      <a
+                        href="/api/v1/auth/instagram/login"
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-sm transition-all"
+                      >
+                        <Sparkles className="w-4 h-4 text-[#0066FF]" /> Logar Direto com o Instagram Meta
+                      </a>
 
-                  <div className="space-y-2 pt-2">
-                    <input
-                      type="text"
-                      value={igAccountId}
-                      onChange={(e) => setIgAccountId(e.target.value)}
-                      placeholder="Instagram Account ID"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
-                    />
-                    <input
-                      type="password"
-                      value={igAccessToken}
-                      onChange={(e) => setIgAccessToken(e.target.value)}
-                      placeholder="Access Token (Meta Token)"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
+                      <button
+                        type="button"
+                        onClick={handleSyncInsights}
+                        disabled={syncingInsights}
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 py-2.5 text-xs font-bold border border-slate-200 transition-all disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-4 h-4 text-[#0066FF] ${syncingInsights ? 'animate-spin' : ''}`} />
+                        {syncingInsights ? 'Sincronizando Métricas Meta...' : 'Sincronizar Métricas do Meta Instagram'}
+                      </button>
+
+                      {insightsMessage && (
+                        <p className="text-[11px] text-blue-800 bg-blue-50 p-2.5 rounded-xl border border-blue-200">{insightsMessage}</p>
+                      )}
+
+                      <div className="space-y-2 pt-2">
+                        <input
+                          type="text"
+                          value={igAccountId}
+                          onChange={(e) => setIgAccountId(e.target.value)}
+                          placeholder="Instagram Account ID"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
+                        />
+                        <input
+                          type="password"
+                          value={igAccessToken}
+                          onChange={(e) => setIgAccessToken(e.target.value)}
+                          placeholder="Access Token (Meta Token)"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {settingsMessage && (
                   <p className="text-xs text-blue-800 bg-blue-50 p-3 rounded-xl border border-blue-200">{settingsMessage}</p>

@@ -236,3 +236,98 @@ def test_user_settings_text_style_and_cycle_badge(tmp_path):
     videos = res.json()["videos"]
     assert len(videos) == 1
     assert videos[0]["used_in_cycle"] is False
+
+
+def test_user_delivery_settings_and_telegram_endpoint():
+    import uuid
+    from src.app import get_repo
+
+    repo = get_repo()
+    user_key = f"usr_key_tg_{uuid.uuid4()}"
+    user = repo.create_user(
+        email=f"tg_{uuid.uuid4()}@test.com",
+        password_hash="hash",
+        api_key=user_key,
+    )
+
+    # Initial profile check
+    res = client.get("/api/v1/user/me", headers={"X-API-Key": user_key})
+    assert res.status_code == 200
+    assert res.json()["delivery_channel"] in ("instagram", "telegram")
+
+    # Update telegram credentials via dedicated endpoint
+    res_tg = client.post(
+        "/api/v1/user/telegram",
+        headers={"X-API-Key": user_key},
+        json={
+            "telegram_bot_token": "123456:bot-token-test",
+            "telegram_channel_id": "@meucanalteste",
+        },
+    )
+    assert res_tg.status_code == 200
+    assert res_tg.json()["telegram_channel_id"] == "@meucanalteste"
+
+    # Update delivery channel in user settings
+    res_settings = client.post(
+        "/api/v1/user/settings",
+        headers={"X-API-Key": user_key},
+        json={
+            "delivery_channel": "telegram",
+            "default_caption_suffix": "Legenda customizada",
+            "share_to_feed": 0,
+            "default_post_interval_hours": 3,
+        },
+    )
+    assert res_settings.status_code == 200
+    assert res_settings.json()["delivery_channel"] == "telegram"
+
+    # Verify updated values in profile
+    res_me = client.get("/api/v1/user/me", headers={"X-API-Key": user_key})
+    assert res_me.status_code == 200
+    me = res_me.json()
+    assert me["delivery_channel"] == "telegram"
+    assert me["telegram_bot_token"] == "123456:bot-token-test"
+    assert me["telegram_channel_id"] == "@meucanalteste"
+
+
+@patch("src.telegram_publisher.TelegramPublisher.publish_video")
+def test_publish_job_now_telegram(mock_tg_publish, tmp_path):
+    import uuid
+    from src.app import get_repo
+
+    repo = get_repo()
+    user_key = f"usr_key_pubtg_{uuid.uuid4()}"
+    user = repo.create_user(
+        email=f"pubtg_{uuid.uuid4()}@test.com",
+        password_hash="hash",
+        api_key=user_key,
+    )
+    repo.update_user_settings(
+        user["id"],
+        default_caption_suffix="Test Caption",
+        share_to_feed=0,
+        default_post_interval_hours=3,
+        delivery_channel="telegram"
+    )
+    repo.update_user_telegram_credentials(user["id"], "token_abc", "-100123")
+
+    dummy_video = tmp_path / "rendered.mp4"
+    dummy_video.write_bytes(b"content")
+
+    job = repo.create_job(user_id=user["id"], url="https://instagram.com/reel/123/")
+    repo.update_job(job["id"], status="completed", output_path=str(dummy_video))
+
+    mock_tg_publish.return_value = {"ok": True}
+
+    res = client.post(
+        f"/api/v1/jobs/{job['id']}/publish",
+        headers={"X-API-Key": user_key},
+        json={},
+    )
+    assert res.status_code == 200
+    assert "Telegram" in res.json()["message"]
+
+    mock_tg_publish.assert_called_once()
+    updated_job = repo.get_job(job["id"])
+    assert updated_job["publish_state"] == "posted"
+

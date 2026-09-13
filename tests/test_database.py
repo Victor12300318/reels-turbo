@@ -237,3 +237,25 @@ def test_publish_claim_and_uncertain_resolution(repo):
     assert discarded["posted_at"] is None
 
 
+def test_user_telegram_credentials_and_delivery_channel(repo):
+    user = repo.create_user(email="tg@test.com", password_hash="hash", api_key="tg_key")
+    assert user.get("delivery_channel") == "instagram"
+
+    repo.update_user_settings(
+        user["id"],
+        default_caption_suffix="#telegram",
+        share_to_feed=0,
+        default_post_interval_hours=5,
+        text_style=None,
+        delivery_channel="telegram"
+    )
+    repo.update_user_telegram_credentials(user["id"], "bot_123:token", "-10011223344")
+
+    updated = repo.get_user_by_id(user["id"])
+    assert updated["delivery_channel"] == "telegram"
+    assert updated["telegram_bot_token"] == "bot_123:token"
+    assert updated["telegram_channel_id"] == "-10011223344"
+    assert updated["default_caption_suffix"] == "#telegram"
+
+
+
